@@ -31,6 +31,12 @@ importers:
         specifier: ^6.1.0
         version: 6.19.3(typescript@5.9.3)
 
+  packages/domain:
+    devDependencies:
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
 packages:
 
   '@esbuild/aix-ppc64@0.21.5':
