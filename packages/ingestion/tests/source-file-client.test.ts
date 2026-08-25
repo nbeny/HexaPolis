@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { AssembleeNationaleClient } from '../src/http/an-client.js'
+import { SourceFileClient } from '../src/http/source-file-client.js'
 import type { ResourceDescriptor } from '../src/contract.js'
 
 let server: Server
@@ -41,16 +41,16 @@ function descriptor(): ResourceDescriptor {
   }
 }
 
-describe('AssembleeNationaleClient', () => {
+describe('SourceFileClient', () => {
   it('télécharge et calcule un checksum sha256 stable', async () => {
-    const client = new AssembleeNationaleClient(cacheDir)
+    const client = new SourceFileClient(cacheDir)
     const file = await client.fetch(descriptor())
     expect(file.checksum).toHaveLength(64)
     expect(file.bytes).toBe(15)
   })
 
   it('ne retélécharge pas un fichier déjà en cache', async () => {
-    const client = new AssembleeNationaleClient(cacheDir)
+    const client = new SourceFileClient(cacheDir)
     const before = hits
     await client.fetch(descriptor())
     expect(hits).toBe(before)
@@ -66,7 +66,7 @@ describe('AssembleeNationaleClient', () => {
     if (typeof address === 'string' || address === null) throw new Error('adresse invalide')
 
     const emptyCache = await mkdtemp(join(tmpdir(), 'poligraph-'))
-    const client = new AssembleeNationaleClient(emptyCache)
+    const client = new SourceFileClient(emptyCache)
     const target = { ...descriptor(), url: `http://127.0.0.1:${address.port}/absent.zip` }
 
     await expect(client.fetch(target)).rejects.toThrow(/404/)
@@ -85,7 +85,7 @@ describe('AssembleeNationaleClient', () => {
     if (typeof address === 'string' || address === null) throw new Error('adresse invalide')
 
     const hitCache = await mkdtemp(join(tmpdir(), 'poligraph-'))
-    const client = new AssembleeNationaleClient(hitCache)
+    const client = new SourceFileClient(hitCache)
     const target = { ...descriptor(), url: `http://127.0.0.1:${address.port}/AMO10.json.zip` }
 
     const first = await client.fetch(target)
@@ -110,7 +110,7 @@ describe('AssembleeNationaleClient', () => {
     if (typeof address === 'string' || address === null) throw new Error('adresse invalide')
 
     const corruptCache = await mkdtemp(join(tmpdir(), 'poligraph-'))
-    const client = new AssembleeNationaleClient(corruptCache)
+    const client = new SourceFileClient(corruptCache)
     const target = { ...descriptor(), url: `http://127.0.0.1:${address.port}/AMO10.json.zip` }
 
     const first = await client.fetch(target)

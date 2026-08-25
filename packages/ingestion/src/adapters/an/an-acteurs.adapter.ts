@@ -7,7 +7,7 @@ import type {
   SourceAdapter,
   StageReport,
 } from '../../contract.js'
-import { AssembleeNationaleClient } from '../../http/an-client.js'
+import { SourceFileClient } from '../../http/source-file-client.js'
 import { normalizeAn } from './normalize.js'
 import { stageActeurs } from './stage-acteurs.js'
 import { stageOrganes } from './stage-organes.js'
@@ -23,7 +23,7 @@ export class AnActeursAdapter implements SourceAdapter {
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly client: AssembleeNationaleClient,
+    private readonly client: SourceFileClient,
   ) {}
 
   async discover(): Promise<ResourceDescriptor[]> {

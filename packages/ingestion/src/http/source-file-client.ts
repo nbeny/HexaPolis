@@ -16,7 +16,13 @@ function isNotFound(error: unknown): boolean {
   )
 }
 
-export class AssembleeNationaleClient {
+/**
+ * Télécharge une ressource HTTP et met le résultat en cache par empreinte
+ * sha256, quelle que soit la source qui la publie. Partagé par les adaptateurs
+ * AN (acteurs, scrutins) et RNE ; rien ici n'est spécifique à l'Assemblée
+ * nationale.
+ */
+export class SourceFileClient {
   constructor(private readonly cacheDir: string) {}
 
   async fetch(descriptor: ResourceDescriptor): Promise<FetchedFile> {

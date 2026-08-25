@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { AnScrutinsAdapter, LEGISLATURES_DISPONIBLES } from '../src/adapters/an/an-scrutins.adapter.js'
 import { AnActeursAdapter } from '../src/adapters/an/an-acteurs.adapter.js'
-import { AssembleeNationaleClient } from '../src/http/an-client.js'
+import { SourceFileClient } from '../src/http/source-file-client.js'
 
 // Ni base ni réseau : on ne vérifie que les descripteurs.
 const prisma = null as never
-const client = new AssembleeNationaleClient('.data/test-unused')
+const client = new SourceFileClient('.data/test-unused')
 
 describe('AnScrutinsAdapter.discover', () => {
   it('couvre les quatre législatures par défaut', async () => {

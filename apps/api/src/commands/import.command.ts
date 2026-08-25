@@ -4,7 +4,7 @@ import { getPrisma, type PrismaClient } from '@poligraph/db'
 import {
   AnActeursAdapter,
   AnScrutinsAdapter,
-  AssembleeNationaleClient,
+  SourceFileClient,
   LEGISLATURES_DISPONIBLES,
   openImportRun,
   closeImportRun,
@@ -97,7 +97,7 @@ export class ImportCommand extends CommandRunner {
     prisma: PrismaClient,
     options: ImportCommandOptions,
   ): SourceAdapter {
-    const client = new AssembleeNationaleClient('.data/an')
+    const client = new SourceFileClient('.data/an')
     if (target === 'an:scrutins') {
       return new AnScrutinsAdapter(prisma, client, options.legislature ?? LEGISLATURES_DISPONIBLES)
     }

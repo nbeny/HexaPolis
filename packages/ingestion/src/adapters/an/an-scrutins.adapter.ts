@@ -7,7 +7,7 @@ import type {
   SourceAdapter,
   StageReport,
 } from '../../contract.js'
-import { AssembleeNationaleClient } from '../../http/an-client.js'
+import { SourceFileClient } from '../../http/source-file-client.js'
 import { normalizeScrutins } from './normalize-scrutins.js'
 import { stageScrutins } from './stage-scrutins.js'
 
@@ -31,7 +31,7 @@ export class AnScrutinsAdapter implements SourceAdapter {
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly client: AssembleeNationaleClient,
+    private readonly client: SourceFileClient,
     private readonly legislatures: readonly number[] = LEGISLATURES_DISPONIBLES,
   ) {}
 

@@ -7,26 +7,19 @@ import type {
   SourceAdapter,
   StageReport,
 } from '../../contract.js'
-import { AssembleeNationaleClient } from '../../http/an-client.js'
+import { SourceFileClient } from '../../http/source-file-client.js'
 import { normalizeRne } from './normalize-rne.js'
 import { stageRne } from './stage-rne.js'
 
 const RNE_DEPUTES_URL =
   'https://static.data.gouv.fr/resources/repertoire-national-des-elus-1/20260811-155035/elus-depute-dep.csv'
 
-/**
- * `AssembleeNationaleClient` télécharge n'importe quelle ressource HTTP en
- * mettant le résultat en cache par empreinte ; son nom vient de son premier
- * usage mais n'a rien de spécifique à l'AN. La réutiliser ici plutôt que
- * d'écrire un second client évite de dupliquer la logique de cache — mais le
- * nom devient trompeur au fil des sources qui l'emploient.
- */
 export class RneAdapter implements SourceAdapter {
   readonly source = 'RNE' as const
 
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly client: AssembleeNationaleClient,
+    private readonly client: SourceFileClient,
   ) {}
 
   async discover(): Promise<ResourceDescriptor[]> {
