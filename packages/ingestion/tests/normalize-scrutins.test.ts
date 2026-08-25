@@ -112,6 +112,22 @@ describe('normalizeScrutins', () => {
     }
   })
 
+  it('les compteurs de positions sont fiables sur un rejeu', async () => {
+    const run = await prepare()
+
+    // `created` compte toutes les entités silver écrites, scrutins ET positions
+    // confondus : 5 scrutins + 4 positions au premier passage. Au second, les
+    // scrutins existent déjà (ils passent en `updated`) et les 4 positions
+    // entrent en collision, d'où 0 création et 4 inchangées.
+    const first = await normalizeScrutins(prisma, run)
+    expect(first.created).toBe(9)
+    expect(first.unchanged).toBe(0)
+
+    const second = await normalizeScrutins(prisma, run)
+    expect(second.created).toBe(0)
+    expect(second.unchanged).toBe(4)
+  })
+
   it('est idempotent', async () => {
     const run = await prepare()
     await normalizeScrutins(prisma, run)

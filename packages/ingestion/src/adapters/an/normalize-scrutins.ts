@@ -109,13 +109,11 @@ export async function normalizeScrutins(
     ballotByUid.set(scrutin.uid, ballot.id)
   }
 
-  // Positions : lues et écrites par lots.
-  const existingKeys = new Set(
-    (await prisma.ballotPosition.findMany({ select: { naturalKey: true } })).map(
-      (p) => p.naturalKey,
-    ),
-  )
-
+  // Positions : lues et écrites par lots. L'unicité de natural_key est déjà
+  // garantie par la contrainte en base ; dupliquer cette invariance dans un
+  // Set JS coûterait environ un demi-gigaoctet à l'échelle de production
+  // (2,46 millions de lignes) pour ne rien apporter de plus. createMany avec
+  // skipDuplicates suffit, y compris pour les doublons internes à un même lot.
   let cursor: bigint | undefined
   let buffer: {
     naturalKey: string
@@ -128,8 +126,10 @@ export async function normalizeScrutins(
 
   const flush = async (): Promise<void> => {
     if (buffer.length === 0) return
+    const attempted = buffer.length
     const inserted = await prisma.ballotPosition.createMany({ data: buffer, skipDuplicates: true })
     report.created += inserted.count
+    report.unchanged += attempted - inserted.count
     buffer = []
   }
 
@@ -151,15 +151,8 @@ export async function normalizeScrutins(
         continue
       }
 
-      const key = naturalKey(ballotId, personId)
-      if (existingKeys.has(key)) {
-        report.unchanged++
-        continue
-      }
-      existingKeys.add(key)
-
       buffer.push({
-        naturalKey: key,
+        naturalKey: naturalKey(ballotId, personId),
         ballotId,
         personId,
         position: raw.categorie,
