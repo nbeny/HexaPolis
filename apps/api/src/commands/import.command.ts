@@ -4,6 +4,8 @@ import { getPrisma, type PrismaClient } from '@poligraph/db'
 import {
   AnActeursAdapter,
   AnScrutinsAdapter,
+  RneAdapter,
+  CnccfpAdapter,
   SourceFileClient,
   LEGISLATURES_DISPONIBLES,
   openImportRun,
@@ -21,7 +23,7 @@ interface ImportCommandOptions {
   legislature?: number[]
 }
 
-const TARGETS = ['an:acteurs', 'an:scrutins'] as const
+const TARGETS = ['an:acteurs', 'an:scrutins', 'rne:deputes', 'cnccfp:comptes'] as const
 
 interface Report {
   staged: number
@@ -97,6 +99,13 @@ export class ImportCommand extends CommandRunner {
     prisma: PrismaClient,
     options: ImportCommandOptions,
   ): SourceAdapter {
+    if (target === 'rne:deputes') {
+      return new RneAdapter(prisma, new SourceFileClient('.data/rne'))
+    }
+    if (target === 'cnccfp:comptes') {
+      return new CnccfpAdapter(prisma, new SourceFileClient('.data/cnccfp'))
+    }
+
     const client = new SourceFileClient('.data/an')
     if (target === 'an:scrutins') {
       return new AnScrutinsAdapter(prisma, client, options.legislature ?? LEGISLATURES_DISPONIBLES)
