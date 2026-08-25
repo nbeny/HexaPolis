@@ -73,6 +73,9 @@ importers:
       '@poligraph/domain':
         specifier: workspace:*
         version: link:../domain
+      csv-parse:
+        specifier: ^7.0.2
+        version: 7.0.2
       yauzl-promise:
         specifier: ^4.0.0
         version: 4.0.0
@@ -905,6 +908,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  csv-parse@7.0.2:
+    resolution: {integrity: sha512-uKZghv9UmPkMVLYy//KZ9HFAIJsl7wkhoEdIL0+rhuSY9pZQlhaeGEDPIe+/w7eh81MOql8Q/9+inAGWG6ZHYA==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -1990,6 +1996,8 @@ snapshots:
       path-type: 4.0.0
     optionalDependencies:
       typescript: 5.9.3
+
+  csv-parse@7.0.2: {}
 
   debug@4.4.3:
     dependencies:
