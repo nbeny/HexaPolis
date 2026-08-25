@@ -96,6 +96,39 @@ async function seedXavierBretonSansDateNaissance(): Promise<string> {
   return person.id
 }
 
+/**
+ * Deux Élisa Martin connues, homonymes exactes (même matchKey), toutes deux
+ * sans date de naissance et sans circonscription : sans arbitrage, la ligne
+ * RNE « MARTIN Élisa » (née 1972-05-15) ne peut pas les départager — la
+ * cascade rend AMBIGUOUS. C'est exactement le cas qu'un arbitrage humain doit
+ * pouvoir trancher. `personA` porte un identifiant AN, seul moyen pour une
+ * décision de la désigner sans ambiguïté.
+ */
+async function seedTwoElisaMartinsSansDepartage(): Promise<{ personAId: string; personBId: string }> {
+  const personA = await prisma.person.create({
+    data: {
+      displayName: 'Élisa Martin (A)',
+      firstName: 'Élisa',
+      lastName: 'Martin',
+      matchKey: 'elisa|martin',
+      birthDate: null,
+    },
+  })
+  await prisma.externalIdentifier.create({
+    data: { ownerType: 'Person', ownerId: personA.id, sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA900001' },
+  })
+  const personB = await prisma.person.create({
+    data: {
+      displayName: 'Élisa Martin (B)',
+      firstName: 'Élisa',
+      lastName: 'Martin',
+      matchKey: 'elisa|martin',
+      birthDate: null,
+    },
+  })
+  return { personAId: personA.id, personBId: personB.id }
+}
+
 async function stageRneFixture(checksum: string): Promise<ImportRunRef> {
   const run = await openImportRun(prisma, rneDescriptor, checksum)
   if (!run) throw new Error('run attendu')
@@ -206,6 +239,97 @@ describe('normalizeRne', () => {
     expect(await prisma.person.count()).toBe(counts.person)
     expect(await prisma.identityMatch.count()).toBe(counts.identityMatch)
     expect(await prisma.externalIdentifier.count()).toBe(counts.externalIdentifier)
+  })
+
+  it('MERGE : sans arbitrage, deux homonymes sans date de naissance restent AMBIGUOUS', async () => {
+    // Vérifie la prémisse du test MERGE ci-dessous : sans décision, la cascade
+    // seule ne peut pas départager ces deux Élisa Martin.
+    await seedTwoElisaMartinsSansDepartage()
+    const run = await stageRneFixture('c1')
+
+    await normalizeRne(prisma, run)
+
+    const match = await prisma.identityMatch.findFirstOrThrow({
+      where: { sourceId: 'RNE', sourceKey: 'elisa|martin|1972-05-15' },
+    })
+    expect(match.confidence).toBe('AMBIGUOUS')
+    expect(match.personId).toBeNull()
+  })
+
+  it('MERGE : un arbitrage rattache le candidat à la personne qu’il désigne, sans toucher l’autre', async () => {
+    const { personAId, personBId } = await seedTwoElisaMartinsSansDepartage()
+    const run = await stageRneFixture('c1')
+
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-rne-decisions-'))
+    const decisionsPath = join(dir, 'decisions.yaml')
+    try {
+      await writeFile(
+        decisionsPath,
+        `decisions:
+  - decision: MERGE
+    left:  { source: RNE, key: "elisa|martin|1972-05-15" }
+    right: { source: AN, key: "PA900001" }
+    reason: "vérifié manuellement : seule PA900001 correspond réellement"
+    decidedOn: 2026-08-25
+`,
+        'utf-8',
+      )
+
+      await normalizeRne(prisma, run, decisionsPath)
+
+      const match = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'RNE', sourceKey: 'elisa|martin|1972-05-15' },
+      })
+      expect(match.personId).toBe(personAId)
+      expect(match.confidence).toBe('CONFIRMED')
+      expect(match.evidence).toContain('DECISION')
+      // Décidé par un humain, pas déduit par l'algorithme.
+      expect(match.decidedBy).toBe('HUMAN')
+
+      // L'autre personne n'est pas touchée : ni identifiant RNE, ni rattachement.
+      expect(match.personId).not.toBe(personBId)
+      const untouched = await prisma.externalIdentifier.findFirst({
+        where: { ownerId: personBId, sourceId: 'RNE' },
+      })
+      expect(untouched).toBeNull()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('SPLIT : un arbitrage écarte la personne désignée, la cascade retombe sur l’unique homonyme restant', async () => {
+    const { personAId, personBId } = await seedTwoElisaMartinsSansDepartage()
+    const run = await stageRneFixture('c1')
+
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-rne-decisions-'))
+    const decisionsPath = join(dir, 'decisions.yaml')
+    try {
+      await writeFile(
+        decisionsPath,
+        `decisions:
+  - decision: SPLIT
+    left:  { source: RNE, key: "elisa|martin|1972-05-15" }
+    right: { source: AN, key: "PA900001" }
+    reason: "vérifié manuellement : ce n'est pas PA900001"
+    decidedOn: 2026-08-25
+`,
+        'utf-8',
+      )
+
+      await normalizeRne(prisma, run, decisionsPath)
+
+      const match = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'RNE', sourceKey: 'elisa|martin|1972-05-15' },
+      })
+      // personA est écartée par le SPLIT ; personB, seule homonyme restante
+      // une fois l'exclusion appliquée, est retenue par la cascade normale.
+      expect(match.personId).toBe(personBId)
+      expect(match.personId).not.toBe(personAId)
+      expect(match.confidence).toBe('POSSIBLE')
+      expect(match.decidedBy).toBe('HUMAN')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('lève une erreur explicite quand une décision d’arbitrage nomme une clé introuvable parmi les lignes importées', async () => {
