@@ -13,6 +13,7 @@ import {
   failImportRun,
   findLastSuccessfulRun,
   countRejectionsByTable,
+  refreshGold,
   type ImportRunRef,
   type ResourceDescriptor,
   type SourceAdapter,
@@ -60,8 +61,24 @@ export class ImportCommand extends CommandRunner {
       } else {
         await this.importNormally(adapter, prisma)
       }
+      // Les vues gold sont dérivées de silver ; un import qui vient de le
+      // modifier (created/updated non nuls, ou une renormalisation qui
+      // change des rattachements) les laisse périmées tant qu'elles ne sont
+      // pas rafraîchies ici. N'exécute qu'après un import réussi : une
+      // exception plus haut saute ce bloc, gold garde son dernier état
+      // cohérent plutôt que de refléter un import interrompu.
+      await this.refreshGoldViews(prisma)
     } finally {
       await prisma.$disconnect()
+    }
+  }
+
+  private async refreshGoldViews(prisma: PrismaClient): Promise<void> {
+    console.log('\n=== Rafraîchissement des vues gold ===')
+    const results = await refreshGold(prisma)
+    const width = Math.max(...results.map((r) => r.view.length))
+    for (const result of results) {
+      console.log(`${result.view.padEnd(width)} : ${result.rows} lignes en ${result.durationMs} ms`)
     }
   }
 
