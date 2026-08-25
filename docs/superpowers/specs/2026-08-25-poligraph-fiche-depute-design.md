@@ -522,6 +522,29 @@ faux affichés sans erreur. La stratégie est construite autour de ce constat.
 - Montants financiers négatifs ou hors plafond.
 - Positions de vote orphelines.
 
+### Ce que le recompte a réellement trouvé
+
+Exécuté sur les 18 311 scrutins des 14e à 17e législatures : **17 601 vérifiés, 710 écartés,
+35 écarts**.
+
+Les 710 écartés sont les scrutins publiés en `DecompteDissidentsPositionGroupe`, où l'AN ne nomme
+que les dissidents et les non-votants. Les signaler noierait les anomalies réelles.
+
+Les 35 écarts ont été diagnostiqués un par un. **Aucun ne vient de notre lecture** : la comparaison
+entre les votants nommés dans les fichiers publiés et les lignes présentes en base donne zéro
+divergence. Ils se répartissent en deux incohérences internes aux fichiers de l'AN :
+
+| Forme | Cas | Exemple |
+|---|---|---|
+| Le résumé de tête contredit la somme des groupes | 14 | `VTANR5L17V1` annonce 10 non-votants, ses propres groupes en totalisent 21 |
+| Le décompte d'un groupe contredit sa propre liste nominative | 21 | le groupe `PO774834` déclare 8 voix « contre » et ne nomme que 7 députés |
+
+Conséquence de conception : **le décompte officiel affiché sur une fiche doit rester celui publié
+par la source**, et le recompte sert de contrôle, jamais de correction. Corriger silencieusement un
+décompte officiel reviendrait à substituer notre calcul à la donnée officielle — précisément ce que
+la distinction entre donnée officielle et donnée calculée (§5.7) interdit. Quand les deux divergent,
+l'interface doit pouvoir le signaler plutôt que trancher.
+
 ### 10.4 CI
 
 Lint, typecheck, tests unitaires et d'intégration sur PostgreSQL, build.
