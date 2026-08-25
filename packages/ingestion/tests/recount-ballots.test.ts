@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { recountBallots } from '../src/checks/recount-ballots.js'
 import { stageScrutins } from '../src/adapters/an/stage-scrutins.js'
-import { openImportRun } from '../src/run/import-run.js'
+import { closeImportRun, failImportRun, openImportRun } from '../src/run/import-run.js'
 import { resetDatabase, testPrisma } from './helpers/db.js'
 import type { ResourceDescriptor } from '../src/contract.js'
 
@@ -24,7 +24,19 @@ const descriptor: ResourceDescriptor = {
 async function stage(fixture: string, checksum: string): Promise<void> {
   const run = await openImportRun(prisma, descriptor, checksum)
   if (!run) throw new Error('run attendu')
-  await stageScrutins(prisma, fixture, run)
+  const stageReport = await stageScrutins(prisma, fixture, run)
+  // Un vrai import se termine toujours par closeImportRun (voir
+  // importNormally dans import.command.ts) : un run resté ouvert pour
+  // toujours n'arrive jamais en production. Seul le statut SUCCEEDED compte
+  // ici, les compteurs eux-mêmes sont sans importance pour ce contrôle.
+  await closeImportRun(prisma, run, {
+    staged: stageReport.staged,
+    created: 0,
+    updated: 0,
+    unchanged: 0,
+    rejected: stageReport.rejected,
+    pending: 0,
+  })
 }
 
 beforeEach(async () => {
@@ -125,6 +137,32 @@ describe('recountBallots', () => {
 
     const report = await recountBallots(prisma)
 
+    expect(report.checked).toBe(5)
+    expect(report.mismatches).toHaveLength(0)
+  })
+
+  it('ignore un import echoue au profit du dernier import reussi', async () => {
+    // Import réussi, complet, plus ancien.
+    await stage(ECLATES, 'c6-import-reussi')
+
+    // Import plus récent mais interrompu (réseau coupé, disque plein…) :
+    // le run est marqué FAILED et son bronze n'a que partiellement été stagé.
+    const runEchoue = await openImportRun(prisma, descriptor, 'c6-import-echoue')
+    if (!runEchoue) throw new Error('run attendu')
+    await stageScrutins(prisma, ECLATES, runEchoue)
+    const positionsTronquees = await prisma.anPositionRaw.findMany({
+      where: { importRunId: runEchoue.id },
+      take: 5,
+    })
+    await prisma.anPositionRaw.deleteMany({
+      where: { id: { in: positionsTronquees.map((p) => p.id) } },
+    })
+    await failImportRun(prisma, runEchoue)
+
+    const report = await recountBallots(prisma)
+
+    // Le run FAILED, bien que le plus récent, doit être totalement ignoré au
+    // profit du run SUCCEEDED précédent : aucun écart ne doit être signalé.
     expect(report.checked).toBe(5)
     expect(report.mismatches).toHaveLength(0)
   })

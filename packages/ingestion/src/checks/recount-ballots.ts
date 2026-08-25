@@ -32,6 +32,14 @@ const CATEGORIES = ['POUR', 'CONTRE', 'ABSTENTION', 'NON_VOTANT'] as const
  * plusieurs lignes bronze, une par run qui l'a importé : on ne recompte que
  * celle du run le plus récent, sans quoi une republication ferait crier au
  * loup sur des milliers de scrutins parfaitement sains.
+ *
+ * Seul un run `SUCCEEDED` a été déclaré complet par `closeImportRun`. Un run
+ * `RUNNING` est encore en cours, un run `FAILED` n'a stagé qu'une partie de
+ * l'archive : ni l'un ni l'autre ne doit jamais être recompté, sans quoi un
+ * import interrompu (réseau coupé, disque plein…) plus récent qu'un import
+ * réussi ferait accuser le parseur d'une incomplétude qui n'est que la sienne.
+ * Un scrutin dont toutes les lignes bronze viennent d'un run non réussi n'est
+ * ni vérifié ni écarté : on n'en a tout simplement pas d'import complet.
  */
 export async function recountBallots(prisma: PrismaClient): Promise<RecountReport> {
   const report: RecountReport = { checked: 0, skipped: 0, mismatches: [] }
@@ -51,21 +59,25 @@ export async function recountBallots(prisma: PrismaClient): Promise<RecountRepor
   if (scrutins.length === 0) return report
 
   // `importRunId` est un UUID, non ordonnable en lui-même : on passe par
-  // `ImportRun.startedAt` pour savoir quel run est le plus récent.
+  // `ImportRun.startedAt` pour savoir quel run est le plus récent. Seuls les
+  // runs réussis entrent dans cette carte : un run absent d'ici est ignoré
+  // plus bas, quelle que soit sa date.
   const runIds = [...new Set(scrutins.map((s) => s.importRunId))]
   const runs = await prisma.importRun.findMany({
-    where: { id: { in: runIds } },
+    where: { id: { in: runIds }, status: 'SUCCEEDED' },
     select: { id: true, startedAt: true },
   })
   const startedAtByRun = new Map(runs.map((r) => [r.id, r.startedAt.getTime()]))
 
-  // Une seule ligne bronze retenue par scrutin : celle du run le plus récent.
+  // Une seule ligne bronze retenue par scrutin : celle du run réussi le plus récent.
   const dernierParUid = new Map<string, (typeof scrutins)[number]>()
   for (const scrutin of scrutins) {
+    const startedAt = startedAtByRun.get(scrutin.importRunId)
+    if (startedAt === undefined) continue // run non réussi (en cours ou en échec) : ignoré
+
     const precedent = dernierParUid.get(scrutin.uid)
-    const startedAt = startedAtByRun.get(scrutin.importRunId) ?? 0
-    const startedAtPrecedent = precedent ? (startedAtByRun.get(precedent.importRunId) ?? 0) : -1
-    if (!precedent || startedAt > startedAtPrecedent) {
+    const startedAtPrecedent = precedent ? startedAtByRun.get(precedent.importRunId) : undefined
+    if (!precedent || startedAt > (startedAtPrecedent ?? -Infinity)) {
       dernierParUid.set(scrutin.uid, scrutin)
     }
   }
