@@ -88,6 +88,59 @@ export async function failImportRun(prisma: PrismaClient, run: ImportRunRef): Pr
   })
 }
 
+/**
+ * Retrouve le dernier import réussi pour une ressource, sans en créer un
+ * nouveau ni toucher à la base (contrairement à `openImportRun`). Sert à
+ * rejouer la normalisation depuis le bronze déjà stagé (`--renormalize`),
+ * par exemple après correction d'un bug de parsing, sans retélécharger ni
+ * re-staginger la ressource. Renvoie `null` si la ressource ou un run réussi
+ * n'existe pas encore.
+ */
+export async function findLastSuccessfulRun(
+  prisma: PrismaClient,
+  descriptor: ResourceDescriptor,
+): Promise<ImportRunRef | null> {
+  const resource = await prisma.datasetResource.findFirst({
+    where: {
+      externalId: descriptor.resourceExternalId,
+      dataset: {
+        externalId: descriptor.datasetExternalId,
+        sourceId: descriptor.sourceKey,
+      },
+    },
+  })
+  if (!resource) return null
+
+  const run = await prisma.importRun.findFirst({
+    where: { resourceId: resource.id, status: 'SUCCEEDED' },
+    orderBy: { startedAt: 'desc' },
+  })
+  if (!run) return null
+
+  return { id: run.id, resourceId: run.resourceId, checksum: run.checksum }
+}
+
+/**
+ * Ventile les rejets d'un run par table bronze, pour un rapport qui ne
+ * confond pas un acteur rejeté avec un mandat rejeté.
+ */
+export async function countRejectionsByTable(
+  prisma: PrismaClient,
+  run: ImportRunRef,
+): Promise<Record<string, number>> {
+  const groups = await prisma.importRejection.groupBy({
+    by: ['bronzeTable'],
+    where: { importRunId: run.id },
+    _count: { _all: true },
+  })
+
+  const counts: Record<string, number> = {}
+  for (const group of groups) {
+    counts[group.bronzeTable] = group._count._all
+  }
+  return counts
+}
+
 export async function recordRejection(
   prisma: PrismaClient,
   run: ImportRunRef,

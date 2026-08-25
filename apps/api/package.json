@@ -1,0 +1,23 @@
+{
+  "name": "@poligraph/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "poligraph": "./dist/main.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests'",
+    "cli": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@poligraph/db": "workspace:*",
+    "@poligraph/ingestion": "workspace:*",
+    "nest-commander": "^3.15.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": { "tsx": "^4.19.2" }
+}

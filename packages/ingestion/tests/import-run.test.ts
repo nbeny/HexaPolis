@@ -1,5 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { openImportRun, closeImportRun, recordRejection } from '../src/run/import-run.js'
+import {
+  openImportRun,
+  closeImportRun,
+  recordRejection,
+  findLastSuccessfulRun,
+  countRejectionsByTable,
+} from '../src/run/import-run.js'
 import { resetDatabase, testPrisma } from './helpers/db.js'
 import type { ResourceDescriptor } from '../src/contract.js'
 
@@ -101,5 +107,50 @@ describe('recordRejection', () => {
       message: 'uid absent',
     })
     expect(await prisma.importRejection.count()).toBe(1)
+  })
+})
+
+describe('findLastSuccessfulRun', () => {
+  it('renvoie null quand aucun import n’a réussi', async () => {
+    const run = await openImportRun(prisma, descriptor, 'abc123')
+    if (!run) throw new Error('run attendu')
+    expect(await findLastSuccessfulRun(prisma, descriptor)).toBeNull()
+  })
+
+  it('retrouve le dernier import réussi pour rejouer la normalisation', async () => {
+    const first = await openImportRun(prisma, descriptor, 'abc123')
+    if (!first) throw new Error('run attendu')
+    await closeImportRun(prisma, first, { created: 1, updated: 0, unchanged: 0, rejected: 0, pending: 0 })
+
+    const found = await findLastSuccessfulRun(prisma, descriptor)
+    expect(found?.id).toBe(first.id)
+    expect(found?.checksum).toBe('abc123')
+  })
+
+  it('ignore les imports en échec', async () => {
+    const failed = await openImportRun(prisma, descriptor, 'abc123')
+    if (!failed) throw new Error('run attendu')
+    await prisma.importRun.update({ where: { id: failed.id }, data: { status: 'FAILED' } })
+
+    expect(await findLastSuccessfulRun(prisma, descriptor)).toBeNull()
+  })
+})
+
+describe('countRejectionsByTable', () => {
+  it('ventile les rejets par table bronze', async () => {
+    const run = await openImportRun(prisma, descriptor, 'abc123')
+    if (!run) throw new Error('run attendu')
+    await recordRejection(prisma, run, { bronzeTable: 'an_acteur_raw', code: 'A', message: 'x' })
+    await recordRejection(prisma, run, { bronzeTable: 'an_mandat_raw', code: 'B', message: 'y' })
+    await recordRejection(prisma, run, { bronzeTable: 'an_mandat_raw', code: 'C', message: 'z' })
+
+    const counts = await countRejectionsByTable(prisma, run)
+    expect(counts).toEqual({ an_acteur_raw: 1, an_mandat_raw: 2 })
+  })
+
+  it('renvoie un objet vide quand rien n’a été rejeté', async () => {
+    const run = await openImportRun(prisma, descriptor, 'abc123')
+    if (!run) throw new Error('run attendu')
+    expect(await countRejectionsByTable(prisma, run)).toEqual({})
   })
 })
