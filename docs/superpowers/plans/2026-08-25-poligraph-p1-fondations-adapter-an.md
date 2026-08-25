@@ -920,9 +920,14 @@ Ce contrat est le seul point de couplage entre le cœur et les sources. Il n'a p
     "@poligraph/domain": "workspace:*",
     "yauzl-promise": "^4.0.0"
   },
-  "devDependencies": { "vitest": "^2.1.8" }
+  "devDependencies": {
+    "@types/yauzl-promise": "^4.0.1",
+    "vitest": "^2.1.8"
+  }
 }
 ```
+
+> `yauzl-promise` n'embarque aucune déclaration de types : sans `@types/yauzl-promise`, `tsc --noEmit` échoue en `TS7016` dès que la bibliothèque est réellement importée (Task 8). Les tests, eux, passent quand même — Vitest transpile sans vérifier —, si bien que le manque ne se voit qu'au build ou en CI.
 
 `packages/ingestion/tsconfig.json` :
 
