@@ -297,9 +297,24 @@ export class ResolveCommand extends CommandRunner {
           ? `      key: ${JSON.stringify(anchor.key)}`
           : `      key: "A_COMPLETER"`
 
+        // CONFLICT : un identifiant externe partagé porte deux dates de
+        // naissance différentes — erreur de saisie côté source, ou bien deux
+        // personnes distinctes. Rien ici ne permet de trancher, et MERGE
+        // n'est pas plus probable que SPLIT : préremplir MERGE pousserait
+        // l'arbitre vers la fusion, exactement ce que ce mécanisme existe
+        // pour empêcher. Le verbe reste donc un placeholder explicite, comme
+        // `reason`. Sur PROBABLE/POSSIBLE/AMBIGUOUS, la cascade a déjà trouvé
+        // une preuve positive de même personne et ne fait que manquer de
+        // certitude : suggérer MERGE en tête y reste un point de départ
+        // raisonnable.
+        const decisionLine =
+          match.confidence === 'CONFLICT'
+            ? `  - decision: ""  # OBLIGATOIRE : MERGE ou SPLIT, à trancher après vérification`
+            : `  - decision: MERGE  # ou SPLIT si ce n'est PAS la même personne`
+
         entries.push(
           [
-            `  - decision: MERGE  # ou SPLIT si ce n'est PAS la même personne`,
+            decisionLine,
             `    left:`,
             `      source: ${JSON.stringify(match.sourceId)}`,
             `      key: ${JSON.stringify(match.sourceKey)}`,
