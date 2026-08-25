@@ -138,4 +138,59 @@ describe('resolveIdentity', () => {
     expect(verdict.confidence).toBe('UNMATCHED')
     expect(verdict.personId).toBeNull()
   })
+
+  it('confirme sur le seul homonyme dont la date correspond, même si un autre a une date nulle', () => {
+    const verdict = resolveIdentity(
+      { matchKey: 'alexandra|martin', birthDate: '1976-07-28', externalIds: [], districtCode: null },
+      [
+        { personId: 'p-1976', matchKey: 'alexandra|martin', birthDate: '1976-07-28', externalIds: [], districtCodes: [] },
+        { personId: 'p-inconnue', matchKey: 'alexandra|martin', birthDate: null, externalIds: [], districtCodes: [] },
+      ],
+    )
+
+    expect(verdict.confidence).toBe('CONFIRMED')
+    expect(verdict.personId).toBe('p-1976')
+  })
+
+  it('écarte l’homonyme réfuté par sa date de naissance et ne garde que celui de date inconnue', () => {
+    const verdict = resolveIdentity(
+      { matchKey: 'alexandra|martin', birthDate: '1990-01-01', externalIds: [], districtCode: null },
+      [
+        { personId: 'p-1968', matchKey: 'alexandra|martin', birthDate: '1968-10-25', externalIds: [], districtCodes: [] },
+        { personId: 'p-inconnue', matchKey: 'alexandra|martin', birthDate: null, externalIds: [], districtCodes: [] },
+      ],
+    )
+
+    expect(verdict.confidence).toBe('POSSIBLE')
+    expect(verdict.personId).toBe('p-inconnue')
+    expect(verdict.alternatives).not.toContain('p-1968')
+  })
+
+  it('écarte deux homonymes réfutés et ne garde que le survivant de date inconnue', () => {
+    const verdict = resolveIdentity(
+      { matchKey: 'alexandra|martin', birthDate: '1990-01-01', externalIds: [], districtCode: null },
+      [
+        { personId: 'p-1968', matchKey: 'alexandra|martin', birthDate: '1968-10-25', externalIds: [], districtCodes: [] },
+        { personId: 'p-1976', matchKey: 'alexandra|martin', birthDate: '1976-07-28', externalIds: [], districtCodes: [] },
+        { personId: 'p-inconnue', matchKey: 'alexandra|martin', birthDate: null, externalIds: [], districtCodes: [] },
+      ],
+    )
+
+    expect(verdict.confidence).toBe('POSSIBLE')
+    expect(verdict.personId).toBe('p-inconnue')
+    expect(verdict.alternatives).toHaveLength(0)
+  })
+
+  it('rend UNMATCHED quand tous les homonymes sont réfutés par leur date de naissance', () => {
+    const verdict = resolveIdentity(
+      { matchKey: 'alexandra|martin', birthDate: '1990-01-01', externalIds: [], districtCode: null },
+      [
+        { personId: 'p-1968', matchKey: 'alexandra|martin', birthDate: '1968-10-25', externalIds: [], districtCodes: [] },
+        { personId: 'p-1976', matchKey: 'alexandra|martin', birthDate: '1976-07-28', externalIds: [], districtCodes: [] },
+      ],
+    )
+
+    expect(verdict.confidence).toBe('UNMATCHED')
+    expect(verdict.personId).toBeNull()
+  })
 })

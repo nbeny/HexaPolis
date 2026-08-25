@@ -88,12 +88,13 @@ export function resolveIdentity(
     }
   }
 
-  const homonymes = known.filter((person) => person.matchKey === candidate.matchKey)
-  if (homonymes.length === 0) return unmatched
+  const homonymesTrouves = known.filter((person) => person.matchKey === candidate.matchKey)
+  if (homonymesTrouves.length === 0) return unmatched
 
   // Niveau 2 — nom et date de naissance.
+  let homonymes = homonymesTrouves
   if (candidate.birthDate) {
-    const exacts = homonymes.filter((person) => person.birthDate === candidate.birthDate)
+    const exacts = homonymesTrouves.filter((person) => person.birthDate === candidate.birthDate)
     if (exacts.length === 1 && exacts[0]) {
       return {
         confidence: 'CONFIRMED',
@@ -103,10 +104,13 @@ export function resolveIdentity(
         alternatives: [],
       }
     }
-    // Une date connue des deux côtés et différente écarte le rapprochement :
-    // ce n'est pas la même personne, et le dire vaut mieux que le taire.
-    const datesConnues = homonymes.filter((person) => person.birthDate !== null)
-    if (exacts.length === 0 && datesConnues.length === homonymes.length) return unmatched
+    // Une date connue et différente écarte le rapprochement : c'est une preuve
+    // de non-identité, pas une absence de preuve. Une date nulle, elle, ne
+    // désigne ni ne disqualifie personne et reste un candidat légitime.
+    homonymes = homonymesTrouves.filter(
+      (person) => person.birthDate === null || person.birthDate === candidate.birthDate,
+    )
+    if (homonymes.length === 0) return unmatched
   }
 
   // Niveau 3 — circonscription.
