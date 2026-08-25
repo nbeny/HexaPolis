@@ -4,7 +4,14 @@ import { getPrisma, type IdentityMatch, type PrismaClient } from '@poligraph/db'
 
 /** Niveaux de confiance qui n'ont *pas* été fusionnés automatiquement par la
  * cascade et qui attendent donc un arbitrage humain. `CONFIRMED` en est
- * délibérément absent : ces enregistrements-là sont déjà résolus. */
+ * délibérément absent : ces enregistrements-là sont déjà résolus.
+ *
+ * `UNMATCHED` reste une valeur de filtre valide pour `--confidence`, mais est
+ * exclu de la liste *par défaut* (voir `review()`) : un `UNMATCHED` n'a aucun
+ * candidat à départager, ce n'est pas un arbitrage, c'est une absence. Sur la
+ * CNCCFP réelle, ces absences se comptent par milliers (candidats jamais
+ * élus) et noieraient les cas réellement décidables si on les affichait par
+ * défaut. */
 const PENDING_CONFIDENCES = [
   'PROBABLE',
   'POSSIBLE',
@@ -13,6 +20,15 @@ const PENDING_CONFIDENCES = [
   'UNMATCHED',
 ] as const
 type PendingConfidence = (typeof PENDING_CONFIDENCES)[number]
+
+/** Niveaux affichés par défaut, sans `--confidence` explicite : tout ce qui
+ * attend un arbitrage humain, à l'exclusion d'`UNMATCHED` (voir ci-dessus). */
+const DEFAULT_CONFIDENCES: readonly PendingConfidence[] = [
+  'PROBABLE',
+  'POSSIBLE',
+  'AMBIGUOUS',
+  'CONFLICT',
+]
 
 /** Du plus grave au moins grave : une contradiction entre sources mérite d'être
  * vue avant une simple absence de correspondance. */
@@ -54,7 +70,10 @@ interface PersonSummary {
   name: 'resolve',
   arguments: '<action>',
   description:
-    "Lit la file d'arbitrage d'identité (silver.identity_match) sans jamais l'écrire",
+    "Lit la file d'arbitrage d'identité (silver.identity_match) sans jamais l'écrire. " +
+    "Par défaut, review liste les rapprochements réellement décidables (PROBABLE, POSSIBLE, " +
+    "AMBIGUOUS, CONFLICT) et exclut UNMATCHED — un candidat sans aucune personne correspondante " +
+    "n'est pas un arbitrage. Utilisez --confidence UNMATCHED pour les auditer séparément.",
 })
 export class ResolveCommand extends CommandRunner {
   async run(passedParams: string[], options: ResolveCommandOptions): Promise<void> {
@@ -88,7 +107,10 @@ export class ResolveCommand extends CommandRunner {
 
   @Option({
     flags: '--confidence <niveau>',
-    description: `Filtre par un niveau de confiance (${PENDING_CONFIDENCES.join(', ')})`,
+    description:
+      `Filtre par un niveau de confiance (${PENDING_CONFIDENCES.join(', ')}). ` +
+      `Sans cette option, UNMATCHED est exclu de la liste par défaut ` +
+      `(${DEFAULT_CONFIDENCES.join(', ')} uniquement) ; passez --confidence UNMATCHED pour l'auditer.`,
   })
   parseConfidence(value: string): PendingConfidence {
     if (!(PENDING_CONFIDENCES as readonly string[]).includes(value)) {
@@ -116,7 +138,11 @@ export class ResolveCommand extends CommandRunner {
 
     const matches = await prisma.identityMatch.findMany({
       where: {
-        confidence: options.confidence ? options.confidence : { not: 'CONFIRMED' },
+        // Sans --confidence explicite, UNMATCHED est exclu : un candidat sans
+        // aucune personne correspondante n'a rien à arbitrer. Voir
+        // DEFAULT_CONFIDENCES ci-dessus. --confidence UNMATCHED reste le
+        // moyen explicite de les lister, pour qui veut auditer les absences.
+        confidence: options.confidence ? options.confidence : { in: [...DEFAULT_CONFIDENCES] },
         ...(options.source ? { sourceId: options.source } : {}),
       },
       orderBy: [{ sourceId: 'asc' }, { sourceKey: 'asc' }],
@@ -136,7 +162,7 @@ export class ResolveCommand extends CommandRunner {
     const displayed = ordered.slice(0, limit)
 
     if (total === 0) {
-      console.log("Aucun rapprochement en attente : la file d'arbitrage est vide.")
+      console.log("Aucun rapprochement en attente d'arbitrage : la file d'arbitrage est vide.")
     } else {
       const candidateIds = [
         ...new Set(
@@ -172,7 +198,25 @@ export class ResolveCommand extends CommandRunner {
       options.confidence ? `confiance ${options.confidence}` : null,
     ].filter((f): f is string => f !== null)
     const suffix = filtres.length > 0 ? ` (${filtres.join(', ')})` : ''
-    console.log(`\nTotal : ${total} rapprochement(s) en attente${suffix}.`)
+    console.log(`\nTotal : ${total} rapprochement(s) en attente d'arbitrage${suffix}.`)
+
+    // Sans --confidence explicite, on a exclu UNMATCHED de la liste — mais son
+    // compte reste affiché, pour ne jamais faire disparaître des milliers
+    // d'entrées sans le dire. Avec --confidence, l'utilisateur a déjà choisi
+    // ce qu'il voit ; pas besoin de le lui rappeler.
+    if (!options.confidence) {
+      const excludedUnmatched = await prisma.identityMatch.count({
+        where: {
+          confidence: 'UNMATCHED',
+          ...(options.source ? { sourceId: options.source } : {}),
+        },
+      })
+      if (excludedUnmatched > 0) {
+        console.log(
+          `(${excludedUnmatched} UNMATCHED exclus : aucun candidat à départager. Voir --confidence UNMATCHED.)`,
+        )
+      }
+    }
 
     // Une contradiction entre sources doit arrêter une chaîne automatisée ;
     // un simple rapprochement en attente, non.
