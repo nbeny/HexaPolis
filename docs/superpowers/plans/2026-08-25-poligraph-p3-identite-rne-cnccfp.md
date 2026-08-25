@@ -908,12 +908,46 @@ Sortie non nulle s'il existe au moins un `CONFLICT` : une contradiction entre so
 
 ## Task 10 : Import réel et vérification
 
-- [ ] Importer le RNE, puis la CNCCFP.
-- [ ] Rapporter les chiffres réels, et notamment : combien de rapprochements `CONFIRMED` automatiques, combien en attente, combien de `CONFLICT`.
-- [ ] Vérifier en SQL qu'**aucune personne n'a été fusionnée à tort** : deux `Person` distinctes doivent subsister pour les deux Alexandra Martin, et aucune `Candidacy` des deux Sandrine Rousseau ne doit être rattachée à une personne.
-- [ ] Lancer `poligraph resolve review` et consigner ce qu'il produit.
-- [ ] Comparer au chiffre mesuré : **852 candidats CNCCFP** devraient trouver une correspondance nominale parmi les personnes en base, dont **4 clés ambiguës**. Un écart notable doit être expliqué, pas absorbé.
-- [ ] Consigner les chiffres réels dans ce plan et committer.
+- [x] Importer le RNE, puis la CNCCFP.
+- [x] Rapporter les chiffres réels, et notamment : combien de rapprochements `CONFIRMED` automatiques, combien en attente, combien de `CONFLICT`.
+- [x] Vérifier en SQL qu'**aucune personne n'a été fusionnée à tort** : deux `Person` distinctes doivent subsister pour les deux Alexandra Martin, et aucune `Candidacy` des deux Sandrine Rousseau ne doit être rattachée à une personne.
+- [x] Lancer `poligraph resolve review` et consigner ce qu'il produit.
+- [x] Comparer au chiffre mesuré : **852 candidats CNCCFP** devraient trouver une correspondance nominale parmi les personnes en base, dont **4 clés ambiguës**. Un écart notable doit être expliqué, pas absorbé.
+- [x] Consigner les chiffres réels dans ce plan et committer.
+
+### Résultats réels (exécuté le 2026-08-25, base de dev sur `poligraph-db`, port 5433)
+
+**Import RNE** (`pnpm --filter @poligraph/api cli import rne:deputes`, 13 s) :
+Stagé 577 · Créés 577 · Mis à jour 0 · Inchangés 0 · Rejetés 0 · En attente 12.
+`silver.identity_match` (source RNE) : `CONFIRMED` 565, `UNMATCHED` 12. Aucun `AMBIGUOUS` ni `CONFLICT`.
+
+**Import CNCCFP** (`pnpm --filter @poligraph/api cli import cnccfp:comptes`, ~1 min 48 s) :
+Stagé 6292 · Créés 6290 · Mis à jour 0 · Inchangés 0 · Rejetés 2 · En attente 6290.
+Les deux lignes corrompues (`nom = "0"`) ont produit deux `silver.import_rejection` (`code = UNPARSEABLE_NAME`, `bronze_ref` 2993 et 3497) — rejetées avec trace, pas perdues.
+`silver.identity_match` (source CNCCFP) : `POSSIBLE` 66, `PROBABLE` 790, `UNMATCHED` 5434. **Zéro `AMBIGUOUS`, zéro `CONFLICT`** — voir explication ci-dessous, ce n'est pas une anomalie.
+
+**Aucune personne inventée.** `silver.person` reste à **3119** avant et après les deux imports : ni le RNE ni la CNCCFP ne créent de `Person`, ils ne font que s'y rattacher.
+
+**Les quatre homonymes existants tiennent.** `alexandra|martin`, `beatrice|descamps`, `jean|besson`, `jean louis|masson` sont toujours des paires de 2 `Person` distinctes ; aucune n'a fusionné en une seule.
+
+**Candidatures :** 6290 `Candidacy` créées, **0 rattachée** à une `Person` (`person_id` toutes nulles). C'est cohérent avec la conception : la CNCCFP ne publie aucune date de naissance, donc `resolveIdentity` n'atteint jamais `CONFIRMED` pour une candidature CNCCFP — seuls les niveaux 1 et 2 écrivent `person_id`, et le RNE ne crée pas de `Candidacy`. Les candidatures dépassent largement les rattachées : c'est le comportement voulu, pas un échec.
+
+**Devises séparées.** `campaign_account` : `EURO` 6239 comptes, somme 61 833 073,00 € ; `CFP` 51 comptes, somme 88 886 949,00 F. Deux lignes distinctes, aucun agrégat mélangé.
+
+**Cas Sandrine Rousseau.** Les deux candidatures existent (`Sandrine ROUSSEAU`, nuances `ECO` et `DVD`, toutes deux 9ème circonscription de Paris), toutes deux avec `person_id` nul — confirmé. Note technique : la requête SQL fournie dans la consigne (`display_name ILIKE '%ROUSSEAU%Sandrine%'`) ne trouve rien, car `display_name` est stocké prénom-puis-nom (« Sandrine ROUSSEAU »), pas nom-puis-prénom ; le motif correct est `'%Sandrine%ROUSSEAU%'`.
+Les deux `IdentityMatch` correspondants sont en `PROBABLE` (`NAME, DISTRICT`), pas `AMBIGUOUS` : un seul `Person` nommé « Sandrine Rousseau » existe réellement en base (la candidate élue, rattachée par le RNE avec sa date de naissance) ; l'autre candidate (nuance DVD, non élue) n'a jamais de contrepartie `Person`. Le niveau 3 de la cascade (circonscription) trouve donc *une* correspondance unique côté base, jamais deux — d'où `PROBABLE`/`POSSIBLE` et non `AMBIGUOUS`. Dans les deux cas `autoMergeable` est faux : aucune fusion n'a eu lieu, exactement le critère demandé.
+
+**File d'arbitrage.** `pnpm --filter @poligraph/api cli resolve review --limit 10` : sortie non vide (groupe `PROBABLE`), **code de sortie 0**, total 6302 rapprochements en attente (= tous les `IdentityMatch` non `CONFIRMED` : 12 RNE `UNMATCHED` + 66 CNCCFP `POSSIBLE` + 790 CNCCFP `PROBABLE` + 5434 CNCCFP `UNMATCHED`). Un bloc YAML prêt à coller est proposé pour chaque entrée affichée.
+`pnpm --filter @poligraph/api cli resolve review --confidence CONFLICT` : « Aucun rapprochement en attente : la file d'arbitrage est vide. », total 0, **code de sortie 0**. Aucun `CONFLICT` n'existe dans cette base — rien à investiguer sur ce point pour cet import.
+(Note : le code de `resolve.command.ts` inclut délibérément `UNMATCHED` dans la file d'arbitrage — commentaire explicite dans la source — alors que le texte de la Task 9 ne citait que `PROBABLE, POSSIBLE, AMBIGUOUS, CONFLICT`. Divergence bénigne entre la description du plan et l'implémentation documentée, pas un bug.)
+
+**Comparaison au chiffre mesuré (852 candidats / 4 clés ambiguës).** Rejoué avec les fonctions réelles du domaine (`splitCnccfpName`, `normalizeNameForMatching`) sur les 6290 lignes CNCCFP exploitables contre les 3119 `Person` actuelles :
+- **6281 clés distinctes** — identique au chiffre mesuré.
+- **856 candidats CNCCFP** dont la clé correspond à une `Person` connue, contre 852 mesurés — écart de 4, explicable intégralement par la croissance de la base entre la mesure (3115 personnes) et cet import (3119 personnes) ; pas un écart à investiguer plus loin.
+- **4 clés dupliquées qui correspondent aussi à une `Person` connue** : `sandrine|rousseau`, `jean baptiste|moreau`, `stephanie|do`, `philippe|benassaya` — identique à la liste mesurée. (Le fichier CNCCFP complet contient en réalité 9 clés dupliquées au total ; les 5 autres — `dominique|clergue`, `jerome|garcia`, `dominique|martin`, `romain|vincent`, `julien|lassalle` — sont des homonymies internes à la CNCCFP dont *aucun* des deux candidats ne correspond à une `Person` connue ; elles ne créent donc aucune ambiguïté vis-à-vis de la base et ne faisaient pas partie du chiffre mesuré.)
+- Piège relevé au passage : `Mme DÔ Stéphanie` (Bas-Rhin) et `Mme DO Stéphanie` (Seine-et-Marne) diffèrent seulement par l'accent circonflexe dans le CSV brut ; `normalizeNameForMatching` les fait bien collisionner sur la même clé `stephanie|do` grâce à la décomposition NFD — comportement correct, vérifié explicitement.
+
+**Conclusion :** les chiffres réels confirment le plan sur toute la ligne : aucune personne inventée, aucun homonyme fusionné, devises jamais mélangées, ligne corrompue tracée, et le rapprochement nominal (856/6281, 4 clés ambiguës pertinentes) reproduit quasi exactement la mesure faite avant implémentation.
 
 ---
 
