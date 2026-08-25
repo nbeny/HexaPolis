@@ -177,6 +177,7 @@ model Person {
   nameVariants   PersonNameVariant[]
   mandates       Mandate[]
   memberships    BodyMembership[]
+  ballotPositions BallotPosition[]
 
   @@index([matchKey])
   @@map("person")
@@ -226,6 +227,7 @@ model Legislature {
   endDate   DateTime? @map("end_date")
   mandates  Mandate[]
   bodies    Body[]
+  ballots   ParliamentaryBallot[]
 
   @@map("legislature")
   @@schema("silver")
@@ -363,4 +365,45 @@ model AnPositionRaw {
   @@index([acteurRef])
   @@map("an_position_raw")
   @@schema("bronze")
+}
+
+model ParliamentaryBallot {
+  id                  String           @id @default(uuid())
+  naturalKey          String           @unique @map("natural_key")
+  legislatureId       String?          @map("legislature_id")
+  number              String?
+  date                DateTime?
+  title               String?
+  voteTypeCode        String?          @map("vote_type_code")
+  voteTypeLabel       String?          @map("vote_type_label")
+  outcomeCode         String?          @map("outcome_code")
+  outcomeLabel        String?          @map("outcome_label")
+  publicationMode     String?          @map("publication_mode")
+  officialFor         Int?             @map("official_for")
+  officialAgainst     Int?             @map("official_against")
+  officialAbstention  Int?             @map("official_abstention")
+  officialNonVoting   Int?             @map("official_non_voting")
+  legislature         Legislature?     @relation(fields: [legislatureId], references: [id])
+  positions           BallotPosition[]
+
+  @@index([date])
+  @@map("parliamentary_ballot")
+  @@schema("silver")
+}
+
+model BallotPosition {
+  id           String              @id @default(uuid())
+  naturalKey   String              @unique @map("natural_key")
+  ballotId     String              @map("ballot_id")
+  personId     String              @map("person_id")
+  position     String
+  byDelegation Boolean             @default(false) @map("by_delegation")
+  bodyIdAtVote String?             @map("body_id_at_vote")
+  ballot       ParliamentaryBallot @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  person       Person              @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([ballotId])
+  @@map("ballot_position")
+  @@schema("silver")
 }
