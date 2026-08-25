@@ -311,3 +311,56 @@ model Provenance {
   @@map("provenance")
   @@schema("silver")
 }
+
+model AnScrutinRaw {
+  id                    BigInt  @id @default(autoincrement())
+  importRunId           String  @map("import_run_id")
+  entryName             String  @map("entry_name")
+  uid                   String
+  numero                String?
+  legislature           String?
+  organeRef             String? @map("organe_ref")
+  sessionRef            String? @map("session_ref")
+  seanceRef             String? @map("seance_ref")
+  dateScrutin           String? @map("date_scrutin")
+  codeTypeVote          String? @map("code_type_vote")
+  libelleTypeVote       String? @map("libelle_type_vote")
+  typeMajorite          String? @map("type_majorite")
+  sortCode              String? @map("sort_code")
+  sortLibelle           String? @map("sort_libelle")
+  titre                 String?
+  demandeur             String?
+  modePublication       String? @map("mode_publication")
+  nombreVotants         String? @map("nombre_votants")
+  suffragesExprimes     String? @map("suffrages_exprimes")
+  nbrSuffragesRequis    String? @map("nbr_suffrages_requis")
+  decomptePour          String? @map("decompte_pour")
+  decompteContre        String? @map("decompte_contre")
+  decompteAbstentions   String? @map("decompte_abstentions")
+  decompteNonVotants    String? @map("decompte_non_votants")
+  payload               Json
+
+  @@unique([importRunId, uid])
+  @@index([uid])
+  @@index([legislature])
+  @@map("an_scrutin_raw")
+  @@schema("bronze")
+}
+
+model AnPositionRaw {
+  id            BigInt  @id @default(autoincrement())
+  importRunId   String  @map("import_run_id")
+  scrutinUid    String  @map("scrutin_uid")
+  acteurRef     String  @map("acteur_ref")
+  mandatRef     String? @map("mandat_ref")
+  groupeRef     String? @map("groupe_ref")
+  categorie     String
+  parDelegation String? @map("par_delegation")
+  numPlace      String? @map("num_place")
+
+  @@unique([importRunId, scrutinUid, acteurRef, categorie])
+  @@index([scrutinUid])
+  @@index([acteurRef])
+  @@map("an_position_raw")
+  @@schema("bronze")
+}
