@@ -15,6 +15,9 @@ import { stageOrganes } from './stage-organes.js'
 const AMO10_URL =
   'https://data.assemblee-nationale.fr/static/openData/repository/17/amo/deputes_actifs_mandats_actifs_organes/AMO10_deputes_actifs_mandats_actifs_organes.json.zip'
 
+const AMO30_URL =
+  'https://data.assemblee-nationale.fr/static/openData/repository/17/amo/tous_acteurs_mandats_organes_xi_legislature/AMO30_tous_acteurs_tous_mandats_tous_organes_historique.json.zip'
+
 export class AnActeursAdapter implements SourceAdapter {
   readonly source = 'AN' as const
 
@@ -31,6 +34,16 @@ export class AnActeursAdapter implements SourceAdapter {
         datasetTitle: 'Députés actifs, mandats actifs et organes — 17e législature',
         resourceExternalId: 'AMO10_deputes_actifs_mandats_actifs_organes.json.zip',
         url: AMO10_URL,
+        format: 'zip',
+      },
+      // Sans les députés historiques, les scrutins des législatures antérieures
+      // à la 17e n'auraient personne à qui rattacher leurs positions de vote.
+      {
+        sourceKey: 'AN',
+        datasetExternalId: 'amo30-historique',
+        datasetTitle: 'Tous les acteurs, mandats et organes depuis la XIe législature',
+        resourceExternalId: 'AMO30_tous_acteurs_tous_mandats_tous_organes_historique.json.zip',
+        url: AMO30_URL,
         format: 'zip',
       },
     ]
