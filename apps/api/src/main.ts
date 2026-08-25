@@ -16,4 +16,17 @@ try {
   // .env absent (ex. CI) : les variables sont déjà fournies par l'environnement.
 }
 
-await CommandFactory.run(AppModule, ['warn', 'error'])
+// nest-commander avale par défaut les erreurs lancées pendant le parsing des
+// options ou l'exécution d'une commande : sa `serviceErrorHandler` par
+// défaut se contente d'écrire l'erreur sur stderr sans jamais positionner
+// `process.exitCode`, si bien qu'une commande en échec sortait quand même
+// avec le code 0. On force donc un code non nul dès qu'une erreur remonte
+// jusqu'ici, qu'elle vienne d'une option invalide (ex. --legislature) ou
+// d'un import qui a réellement échoué.
+await CommandFactory.run(AppModule, {
+  logger: ['warn', 'error'],
+  serviceErrorHandler: (err: unknown) => {
+    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`)
+    process.exitCode = 1
+  },
+})
