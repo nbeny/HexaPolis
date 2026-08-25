@@ -178,6 +178,7 @@ model Person {
   mandates       Mandate[]
   memberships    BodyMembership[]
   ballotPositions BallotPosition[]
+  candidacies    Candidacy[]
 
   @@index([matchKey])
   @@map("person")
@@ -242,6 +243,7 @@ model Territory {
   parent         Territory?  @relation("TerritoryParent", fields: [parentId], references: [id])
   children       Territory[] @relation("TerritoryParent")
   mandates       Mandate[]
+  candidacies    Candidacy[]
 
   @@unique([type, code])
   @@map("territory")
@@ -405,5 +407,133 @@ model BallotPosition {
   @@index([personId])
   @@index([ballotId])
   @@map("ballot_position")
+  @@schema("silver")
+}
+
+model RneEluRaw {
+  id                  BigInt  @id @default(autoincrement())
+  importRunId         String  @map("import_run_id")
+  ligne               Int
+  codeDepartement     String? @map("code_departement")
+  libelleDepartement  String? @map("libelle_departement")
+  codeCirconscription String? @map("code_circonscription")
+  libelleCirco        String? @map("libelle_circonscription")
+  nom                 String?
+  prenom              String?
+  codeSexe            String? @map("code_sexe")
+  dateNaissance       String? @map("date_naissance")
+  codeCsp             String? @map("code_csp")
+  libelleCsp          String? @map("libelle_csp")
+  dateDebutMandat     String? @map("date_debut_mandat")
+  payload             Json
+
+  @@unique([importRunId, ligne])
+  @@index([nom, prenom])
+  @@map("rne_elu_raw")
+  @@schema("bronze")
+}
+
+model CnccfpCompteRaw {
+  id                BigInt  @id @default(autoincrement())
+  importRunId       String  @map("import_run_id")
+  ligne             Int
+  candidat          String?
+  nom               String?
+  scrutin           String?
+  circonscription   String?
+  departement       String?
+  codeDepartement   String? @map("code_departement")
+  nuance            String?
+  monnaie           String?
+  depensesDeclarees String? @map("depenses_declarees")
+  recettesDeclarees String? @map("recettes_declarees")
+  donsDeclares      String? @map("dons_declares")
+  apportPersonnel   String? @map("apport_personnel")
+  depensesRetenues  String? @map("depenses_retenues")
+  recettesRetenues  String? @map("recettes_retenues")
+  decision          String?
+  payload           Json
+
+  @@unique([importRunId, ligne])
+  @@index([candidat])
+  @@map("cnccfp_compte_raw")
+  @@schema("bronze")
+}
+
+model PoliticalParty {
+  id          String      @id @default(uuid())
+  naturalKey  String      @unique @map("natural_key")
+  name        String
+  shortName   String?     @map("short_name")
+  candidacies Candidacy[]
+
+  @@map("political_party")
+  @@schema("silver")
+}
+
+model Election {
+  id          String      @id @default(uuid())
+  naturalKey  String      @unique @map("natural_key")
+  type        String
+  label       String
+  year        Int
+  candidacies Candidacy[]
+
+  @@map("election")
+  @@schema("silver")
+}
+
+model Candidacy {
+  id          String           @id @default(uuid())
+  naturalKey  String           @unique @map("natural_key")
+  electionId  String           @map("election_id")
+  personId    String?          @map("person_id")
+  partyId     String?          @map("party_id")
+  territoryId String?          @map("territory_id")
+  nuance      String?
+  displayName String           @map("display_name")
+  election    Election         @relation(fields: [electionId], references: [id])
+  person      Person?          @relation(fields: [personId], references: [id])
+  party       PoliticalParty?  @relation(fields: [partyId], references: [id])
+  territory   Territory?       @relation(fields: [territoryId], references: [id])
+  account     CampaignAccount?
+
+  @@index([personId])
+  @@map("candidacy")
+  @@schema("silver")
+}
+
+model CampaignAccount {
+  id                String    @id @default(uuid())
+  candidacyId       String    @unique @map("candidacy_id")
+  currency          String
+  declaredExpenses  Decimal?  @map("declared_expenses") @db.Decimal(14, 2)
+  declaredIncome    Decimal?  @map("declared_income") @db.Decimal(14, 2)
+  declaredDonations Decimal?  @map("declared_donations") @db.Decimal(14, 2)
+  personalFunds     Decimal?  @map("personal_funds") @db.Decimal(14, 2)
+  retainedExpenses  Decimal?  @map("retained_expenses") @db.Decimal(14, 2)
+  retainedIncome    Decimal?  @map("retained_income") @db.Decimal(14, 2)
+  decisionCode      String?   @map("decision_code")
+  candidacy         Candidacy @relation(fields: [candidacyId], references: [id], onDelete: Cascade)
+
+  @@map("campaign_account")
+  @@schema("silver")
+}
+
+model IdentityMatch {
+  id           String   @id @default(uuid())
+  naturalKey   String   @unique @map("natural_key")
+  sourceId     String   @map("source_id")
+  sourceKey    String   @map("source_key")
+  personId     String?  @map("person_id")
+  confidence   String
+  evidence     String[]
+  alternatives String[]
+  decidedBy    String   @default("AUTO") @map("decided_by")
+  resolvedAt   DateTime @default(now()) @map("resolved_at")
+
+  @@index([confidence])
+  @@index([sourceId, confidence])
+  @@map("identity_match")
   @@schema("silver")
 }
