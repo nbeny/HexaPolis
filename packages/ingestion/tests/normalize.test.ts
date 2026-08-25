@@ -192,4 +192,61 @@ describe('normalizeAn', () => {
     // 8 Body + 3 Person : laissés strictement inchangés.
     expect(second.unchanged).toBe(11)
   })
+
+  it("conserve séparément l'appartenance et la fonction dans un même organe", async () => {
+    const run = await stageFixture('c1')
+
+    // L'AN publie deux mandats distincts quand un député est à la fois membre
+    // et titulaire d'une fonction (ex. président) d'un même organe, à la
+    // même date. Sur les vraies données, 59 de ces paires se sont révélées
+    // écrasées silencieusement par un naturalKey de BodyMembership qui
+    // n'incluait pas la qualité : le second upsert remplaçait le premier.
+    await prisma.anMandatRaw.createMany({
+      data: [
+        {
+          importRunId: run.id,
+          uid: 'PM_TEST_MEMBRE',
+          acteurRef: 'PA368',
+          typeOrgane: 'COMPER',
+          organeRef: 'PO59047',
+          dateDebut: '2026-01-01',
+          codeQualite: 'Membre',
+          payload: {},
+        },
+        {
+          importRunId: run.id,
+          uid: 'PM_TEST_PRESIDENT',
+          acteurRef: 'PA368',
+          typeOrgane: 'COMPER',
+          organeRef: 'PO59047',
+          dateDebut: '2026-01-01',
+          codeQualite: 'Président',
+          payload: {},
+        },
+      ],
+    })
+
+    await normalizeAn(prisma, run)
+
+    const personIdentifier = await prisma.externalIdentifier.findUniqueOrThrow({
+      where: { sourceId_kind_value: { sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA368' } },
+    })
+    const bodyIdentifier = await prisma.externalIdentifier.findUniqueOrThrow({
+      where: { sourceId_kind_value: { sourceId: 'AN', kind: 'ORGANE_UID', value: 'PO59047' } },
+    })
+
+    // Filtré sur la date du cas synthétique : le fixture contient déjà un
+    // vrai mandat COMPER de Barnier sur ce même organe à une autre date
+    // (2025-10-01), qui ne doit pas fausser le compte.
+    const memberships = await prisma.bodyMembership.findMany({
+      where: {
+        personId: personIdentifier.ownerId,
+        bodyId: bodyIdentifier.ownerId,
+        startDate: new Date('2026-01-01T00:00:00Z'),
+      },
+    })
+
+    expect(memberships).toHaveLength(2)
+    expect(new Set(memberships.map((m) => m.quality))).toEqual(new Set(['Membre', 'Président']))
+  })
 })

@@ -201,7 +201,14 @@ export async function normalizeAn(
         report.pending++
         continue
       }
-      const key = naturalKey(personId, bodyId, mandat.dateDebut)
+      // La qualité fait partie de la clé : un député peut être à la fois
+      // membre et titulaire d'une fonction (président, secrétaire...) du
+      // même organe à la même date. Ce sont deux faits distincts publiés
+      // séparément par l'AN ; sans la qualité dans la clé, le second upsert
+      // écrase silencieusement le premier (ex. une présidence de commission
+      // disparaît derrière la simple appartenance, ou l'inverse selon
+      // l'ordre de traitement).
+      const key = naturalKey(personId, bodyId, mandat.dateDebut, mandat.codeQualite)
       // Contrairement à Person/Body, cet upsert réécrit endDate/quality sur une
       // ligne existante : ce n'est jamais un no-op, donc « updated » et non
       // « unchanged » lorsque la ligne préexistait déjà.
