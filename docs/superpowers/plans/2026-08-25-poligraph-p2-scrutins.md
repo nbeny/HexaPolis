@@ -1773,6 +1773,34 @@ Consigner les chiffres réels obtenus dans ce plan, sous la Task 10, puis commit
 
 ---
 
+### Chiffres réels obtenus (2026-08-25)
+
+**Import** (`import an:scrutins --legislature 14,15,16`, la 17e étant déjà en base) : lancé à 17:56:13, terminé à 18:03:42, soit **7 min 29 s** — sous l'estimation de 10-15 min.
+
+| Lég. | Scrutins stagés | Positions créées (silver) | En attente |
+|---|---|---|---|
+| 14 | 1 354 | 109 913 | 0 |
+| 15 | 4 417 | 472 631 | 0 |
+| 16 | 4 106 | 603 811 | 2 |
+
+(« Créés » rapporté par la CLI inclut le scrutin lui-même ; positions = créés − scrutins stagés. Les 2 positions en attente en 16e sont `PA429842` et `PA720634`, déjà identifiés comme manquants d'`AMO30`.)
+
+**Vérification SQL** : bronze **2 456 833** positions sur **18 311** scrutins — exactement les totaux attendus. Silver : **2 456 831** positions (écart de 2, expliqué par les 2 acteurs manquants ci-dessus). Répartition : CONTRE 1 184 742, POUR 1 098 903, ABSTENTION 134 863, NON_VOTANT 38 323. Mode de publication : `DecompteDissidentsPositionGroupe` 710, `DecompteNominatif` 17 601 — conforme au tableau des faits mesurés.
+
+**`poligraph check`** : **17 601 vérifiés, 710 écartés, 35 écarts** — exactement les chiffres attendus (30 en 15e, 4 en 16e, 1 en 17e).
+
+Trois écarts ont été examinés en détail (au-delà du seul `VTANR5L17V1` déjà diagnostiqué), en comparant le payload bronze complet (`decompteVoix` par groupe, listes nominatives, `syntheseVote.decompte`) :
+
+- **`VTANR5L15V2938`** (CONTRE officiel 57, recompté 56) : le groupe `PO774834` déclare `decompteVoix.contre = 8` mais ne nomme que 7 votants dans `decompteNominatif.contres.votant`. Incohérence interne à la source, à l'intérieur d'un seul nœud de groupe.
+- **`VTANR5L16V1948`** (ABSTENTION officiel 88, recompté 87) : même défaut — le groupe `PO800502` déclare `decompteVoix.abstentions = 16` (dont `nonVotantsVolontaires = 16`) mais ne nomme que 15 votants.
+- **`VTANR5L15V2814`** (POUR officiel 345, recompté 301 ; ABSTENTION officiel 43, recompté 41) : ici la somme des `decompteVoix` de tous les groupes (301 pour, 177 contre, 41 abstentions, 3 non-votants — qui correspond exactement aux listes nominatives) ne colle pas au total officiel `syntheseVote.decompte` (345/177/43/3). Plus révélateur encore : la somme des quatre catégories officielles (345+177+43+3 = 568) ne correspond même pas à `nombreVotants` (565) déclaré par la source dans le même scrutin. Le total officiel est incohérent avec son propre détail par groupe et avec son propre décompte de votants.
+
+**Verdict pour les trois : défaut de source, pas défaut de notre lecture.** Dans les trois cas, notre recomptage reproduit fidèlement soit les listes nominatives, soit la somme des `decompteVoix` par groupe (qui, eux, correspondent exactement aux listes nominatives) ; c'est le total officiel `syntheseVote.decompte` qui ne se recoupe pas avec le détail publié dans le même document. Aucun bug de parsing identifié.
+
+**Sanity-check député** : les 5 députés les plus actifs (Yaël Braun-Pivet 9 832 votes, Marine Hamelet 8 896, Emeric Salmon 8 202, Jean-Luc Fugit 7 784, Anthony Brosse 7 594) sont des figures plausibles de l'actualité parlementaire récente. Les 5 derniers votes de Michel Barnier (21 et 20 juillet 2026, tous POUR sur des textes de fin de session/CMP) sont cohérents et récents. Rien d'implausible observé.
+
+---
+
 ## Critère d'achèvement du plan 2
 
 - `poligraph import an:scrutins` importe les quatre législatures et rapporte des chiffres conformes au tableau ci-dessus.
