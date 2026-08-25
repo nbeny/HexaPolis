@@ -14,5 +14,16 @@ try {
 }
 
 export default defineConfig({
-  test: { include: ['tests/**/*.test.ts'], testTimeout: 30_000 },
+  test: {
+    include: ['tests/**/*.test.ts'],
+    testTimeout: 30_000,
+    // Plusieurs fichiers de test partagent la même base Postgres de test et
+    // la remettent à zéro (TRUNCATE) dans leur beforeEach. Vitest exécute les
+    // fichiers de test en parallèle par défaut : sans cette option, deux
+    // fichiers peuvent truncater/upserter les mêmes lignes (ex. Source id
+    // 'AN') en même temps et provoquer des violations de contrainte unique
+    // ou des lectures incohérentes. On force l'exécution séquentielle des
+    // fichiers pour ce package.
+    fileParallelism: false,
+  },
 })
