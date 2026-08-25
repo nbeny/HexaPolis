@@ -533,6 +533,8 @@ git commit -m "feat(domain): helpers de conversion XML vers JSON"
 
 `normalizeNameForMatching` sert **uniquement à comparer**. La forme d'origine n'est jamais remplacée.
 
+> **Complété à l'exécution.** Le code ci-dessous a été enrichi après mesure sur les 577 députés réels. Le champ `nom` de l'AN contient parfois un qualificatif de désambiguïsation : deux députées distinctes sont publiées comme `Martin (Alpes-Maritimes)` et `Martin (Gironde)`. Ce qualificatif est retiré avant normalisation — les deux partagent alors la clé `alexandra|martin`, ce qui force l'arbitrage humain au lieu de produire deux clés qui ne correspondent à rien. La barre oblique est traitée en séparateur (`K/Bidi` → `k bidi`), les espaces Unicode sont normalisés, les ligatures latines sans décomposition NFD (`œ`, `æ`, `ø`, `ß`…) sont translittérées, et une clé entièrement vide lève une erreur au lieu de fusionner silencieusement. Voir `packages/domain/src/person-name.ts`, qui fait foi.
+
 - [ ] **Step 1 : Écrire le test qui échoue**
 
 `packages/domain/tests/person-name.test.ts` :
