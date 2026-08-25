@@ -162,3 +162,152 @@ model AnOrganeRaw {
   @@map("an_organe_raw")
   @@schema("bronze")
 }
+
+model Person {
+  id             String               @id @default(uuid())
+  displayName    String               @map("display_name")
+  firstName      String               @map("first_name")
+  lastName       String               @map("last_name")
+  matchKey       String               @map("match_key")
+  civility       String?
+  birthDate      DateTime?            @map("birth_date")
+  birthPlace     String?              @map("birth_place")
+  deathDate      DateTime?            @map("death_date")
+  profession     String?
+  nameVariants   PersonNameVariant[]
+  mandates       Mandate[]
+  memberships    BodyMembership[]
+
+  @@index([matchKey])
+  @@map("person")
+  @@schema("silver")
+}
+
+model PersonNameVariant {
+  id        String @id @default(uuid())
+  personId  String @map("person_id")
+  form      String
+  sourceId  String @map("source_id")
+  person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, form, sourceId])
+  @@map("person_name_variant")
+  @@schema("silver")
+}
+
+model ExternalIdentifier {
+  id        String @id @default(uuid())
+  ownerType String @map("owner_type")
+  ownerId   String @map("owner_id")
+  sourceId  String @map("source_id")
+  kind      String
+  value     String
+
+  @@unique([sourceId, kind, value])
+  @@index([ownerType, ownerId])
+  @@map("external_identifier")
+  @@schema("silver")
+}
+
+model Institution {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  label     String
+  mandates  Mandate[]
+
+  @@map("institution")
+  @@schema("silver")
+}
+
+model Legislature {
+  id        String    @id @default(uuid())
+  number    Int       @unique
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  mandates  Mandate[]
+  bodies    Body[]
+
+  @@map("legislature")
+  @@schema("silver")
+}
+
+model Territory {
+  id             String      @id @default(uuid())
+  type           String
+  code           String
+  label          String
+  parentId       String?     @map("parent_id")
+  parent         Territory?  @relation("TerritoryParent", fields: [parentId], references: [id])
+  children       Territory[] @relation("TerritoryParent")
+  mandates       Mandate[]
+
+  @@unique([type, code])
+  @@map("territory")
+  @@schema("silver")
+}
+
+model Body {
+  id            String           @id @default(uuid())
+  type          String
+  label         String
+  shortLabel    String?          @map("short_label")
+  legislatureId String?          @map("legislature_id")
+  startDate     DateTime?        @map("start_date")
+  endDate       DateTime?        @map("end_date")
+  color         String?
+  legislature   Legislature?     @relation(fields: [legislatureId], references: [id])
+  memberships   BodyMembership[]
+
+  @@map("body")
+  @@schema("silver")
+}
+
+model BodyMembership {
+  id         String    @id @default(uuid())
+  naturalKey String    @unique @map("natural_key")
+  personId   String    @map("person_id")
+  bodyId     String    @map("body_id")
+  quality    String?
+  startDate  DateTime? @map("start_date")
+  endDate    DateTime? @map("end_date")
+  person     Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  body       Body      @relation(fields: [bodyId], references: [id], onDelete: Cascade)
+
+  @@map("body_membership")
+  @@schema("silver")
+}
+
+model Mandate {
+  id             String       @id @default(uuid())
+  naturalKey     String       @unique @map("natural_key")
+  personId       String       @map("person_id")
+  institutionId  String       @map("institution_id")
+  legislatureId  String?      @map("legislature_id")
+  territoryId    String?      @map("territory_id")
+  kind           String
+  startDate      DateTime?    @map("start_date")
+  endDate        DateTime?    @map("end_date")
+  endCause       String?      @map("end_cause")
+  person         Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  institution    Institution  @relation(fields: [institutionId], references: [id])
+  legislature    Legislature? @relation(fields: [legislatureId], references: [id])
+  territory      Territory?   @relation(fields: [territoryId], references: [id])
+
+  @@map("mandate")
+  @@schema("silver")
+}
+
+model Provenance {
+  id          String   @id @default(uuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  field       String?
+  importRunId String   @map("import_run_id")
+  bronzeTable String   @map("bronze_table")
+  bronzeRef   String   @map("bronze_ref")
+  status      String   @default("OFFICIAL")
+
+  @@index([entityType, entityId])
+  @@map("provenance")
+  @@schema("silver")
+}

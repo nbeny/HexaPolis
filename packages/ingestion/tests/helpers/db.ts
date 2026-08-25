@@ -17,4 +17,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
     'TRUNCATE silver.import_rejection, silver.import_run, silver.dataset_resource, silver.dataset, silver.source RESTART IDENTITY CASCADE',
   )
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE silver.provenance, silver.mandate, silver.body_membership, silver.body, silver.territory, silver.legislature, silver.institution, silver.external_identifier, silver.person_name_variant, silver.person RESTART IDENTITY CASCADE',
+  )
 }
