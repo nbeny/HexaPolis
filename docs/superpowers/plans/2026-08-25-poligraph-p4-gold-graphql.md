@@ -398,3 +398,29 @@ Sur base ensemencée : la fiche d'un député renvoie ses mandats et ses votes ;
 - `pnpm test` passe intégralement, sans accès réseau.
 
 Le plan 5 (front Next.js) et le plan 6 (résultats électoraux data.gouv) partent de cet état.
+
+---
+
+## Validation des tests sur cette machine
+
+**Constat, mesuré.** La suite d'intégration complète de `packages/ingestion` dure entre 280 et 520 secondes, et la redirection de port de Docker Desktop lâche sur cette durée. Le symptôme est caractéristique : **les fichiers en échec changent d'une exécution à l'autre**, et chacun passe isolément en moins de quinze secondes. Les erreurs nomment des internes Prisma (`PrismaClientKnownRequestError`, `Can't reach database server`) et non des valeurs attendues — c'est ce qui les distingue d'un vrai échec d'assertion.
+
+Ce n'est pas un défaut du code. Vérifié séparément à trois reprises, dont une où un jeu de données parfaitement correct a failli être « corrigé » pour rien.
+
+Pistes écartées :
+- `connection_limit=1` **aggrave** le problème : 13 fichiers en échec au lieu de 4, et 520 s au lieu de 280.
+- La mémoire n'est pas en cause : le conteneur consomme 38 Mo sur 15,5 Go.
+
+**Mode de validation retenu, en attendant :** valider **un fichier à la fois**.
+
+```bash
+cd packages/ingestion
+export DATABASE_URL_TEST="postgresql://poligraph:poligraph@localhost:5433/poligraph_test?schema=public"
+npx vitest run tests/<fichier>.test.ts
+```
+
+En cas d'erreur de connexion : `docker restart poligraph-db`, attendre dix secondes, relancer. Ne jamais poursuivre un échec de connexion comme s'il s'agissait d'un défaut de logique — mais ne jamais écarter non plus un échec d'assertion reproductible comme s'il s'agissait d'instabilité.
+
+`packages/domain` ne touche pas la base : ses 66 tests se lancent en bloc sans difficulté.
+
+**Conséquence assumée.** L'intégration continue écrite au plan 1 (tâche 17) reste **une hypothèse non vérifiée** : rien ne tourne en bloc sur cette machine, et le dépôt n'a pas de remote GitHub. Elle devra être éprouvée avant d'être considérée comme acquise.
