@@ -1,0 +1,9 @@
+# Arbitrages d'identité décidés par un humain.
+#
+# Ce fichier est prioritaire sur la cascade automatique et rejoué à chaque
+# import : une décision prise une fois n'est jamais redemandée.
+#
+# MERGE : les deux enregistrements désignent la même personne.
+# SPLIT : ils désignent des personnes différentes, malgré ce que suggère
+#         l'algorithme. Sert à verrouiller un cas d'homonymie réel.
+decisions: []
