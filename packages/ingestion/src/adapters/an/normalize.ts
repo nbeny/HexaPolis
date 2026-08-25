@@ -202,6 +202,10 @@ export async function normalizeAn(
         continue
       }
       const key = naturalKey(personId, bodyId, mandat.dateDebut)
+      // Contrairement à Person/Body, cet upsert réécrit endDate/quality sur une
+      // ligne existante : ce n'est jamais un no-op, donc « updated » et non
+      // « unchanged » lorsque la ligne préexistait déjà.
+      const existingMembership = await prisma.bodyMembership.findUnique({ where: { naturalKey: key } })
       await prisma.bodyMembership.upsert({
         where: { naturalKey: key },
         update: { endDate: toDate(mandat.dateFin), quality: mandat.codeQualite },
@@ -214,6 +218,11 @@ export async function normalizeAn(
           endDate: toDate(mandat.dateFin),
         },
       })
+      if (existingMembership) {
+        report.updated++
+      } else {
+        report.created++
+      }
       continue
     }
 
@@ -230,6 +239,9 @@ export async function normalizeAn(
       : null
 
     const key = naturalKey(personId, institution.id, kind, mandat.dateDebut)
+    // Comme pour BodyMembership, cet upsert réécrit endDate/endCause/territoryId
+    // sur une ligne existante : « updated », jamais « unchanged ».
+    const existingMandate = await prisma.mandate.findUnique({ where: { naturalKey: key } })
     const created = await prisma.mandate.upsert({
       where: { naturalKey: key },
       update: { endDate: toDate(mandat.dateFin), endCause: mandat.causeFin, territoryId },
@@ -245,6 +257,11 @@ export async function normalizeAn(
         endCause: mandat.causeFin,
       },
     })
+    if (existingMandate) {
+      report.updated++
+    } else {
+      report.created++
+    }
 
     await recordProvenance(prisma, run, 'Mandate', created.id, 'an_mandat_raw', mandat.uid)
   }

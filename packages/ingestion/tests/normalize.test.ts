@@ -173,4 +173,23 @@ describe('normalizeAn', () => {
     expect(await prisma.bodyMembership.count()).toBe(counts.membership)
     expect(await prisma.provenance.count()).toBe(counts.provenance)
   })
+
+  it('rend compte de toutes les entités écrites, création puis mise à jour', async () => {
+    const run = await stageFixture('c1')
+    const first = await normalizeAn(prisma, run)
+
+    // 8 Body + 3 Person + 3 Mandate + 8 BodyMembership.
+    expect(first.created).toBe(22)
+    expect(first.updated).toBe(0)
+    expect(first.unchanged).toBe(0)
+    expect(first.pending).toBeGreaterThanOrEqual(3)
+
+    const second = await normalizeAn(prisma, run)
+
+    expect(second.created).toBe(0)
+    // 3 Mandate + 8 BodyMembership : réécrits (endDate, quality, territoryId, endCause), donc updated.
+    expect(second.updated).toBe(11)
+    // 8 Body + 3 Person : laissés strictement inchangés.
+    expect(second.unchanged).toBe(11)
+  })
 })
