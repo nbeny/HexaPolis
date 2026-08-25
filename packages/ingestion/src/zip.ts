@@ -15,7 +15,7 @@ export async function* readJsonEntries(
       if (!entry.filename.startsWith(prefix)) continue
       const stream = await entry.openReadStream()
       const chunks: Buffer[] = []
-      for await (const chunk of stream) chunks.push(chunk as Buffer)
+      for await (const chunk of stream) chunks.push(chunk)
       yield { name: entry.filename, json: JSON.parse(Buffer.concat(chunks).toString('utf-8')) }
     }
   } finally {
