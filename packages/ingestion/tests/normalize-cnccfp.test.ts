@@ -668,4 +668,86 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
     expect(await prisma.candidacy.count()).toBe(10)
     expect(await prisma.identityMatch.count({ where: { sourceId: 'CNCCFP' } })).toBe(10)
   })
+
+  it("retire le rattachement quand le verdict s'affaiblit", async () => {
+    const dupontId = await seedJeanDupontAvecMandatPostElection()
+
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-cnccfp-downgrade-'))
+    const seul = join(dir, 'seul.csv')
+    const avecHomonyme = join(dir, 'avec-homonyme.csv')
+    try {
+      const JD = 'JD-1'
+      const HOMONYME = 'JD-2'
+
+      // Étape 1 : un seul candidat de ce nom dans la circonscription — le
+      // mandat post-élection de Jean Dupont corrobore, CONFIRMED, rattaché.
+      await writeFile(
+        seul,
+        [
+          CNCCFP_MINIMAL_HEADER,
+          cnccfpRow({
+            candidat: JD,
+            nom: 'M. DUPONT Jean',
+            circonscription: 'Ain - 1re circonscription',
+            departement: 'Ain',
+            codeDepartement: '1',
+          }),
+        ].join('\n') + '\n',
+        'latin1',
+      )
+      const run1Descriptor: ResourceDescriptor = { ...descriptor, resourceExternalId: 'seul.csv' }
+      const run1 = await openImportRun(prisma, run1Descriptor, 'c-downgrade-1')
+      if (!run1) throw new Error('run attendu')
+      await stageCnccfp(prisma, seul, run1)
+      await normalizeCnccfp(prisma, run1)
+
+      const avant = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${JD}` } })
+      expect(avant.personId).toBe(dupontId)
+      const matchAvant = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'CNCCFP', sourceKey: JD },
+      })
+      expect(matchAvant.confidence).toBe('CONFIRMED')
+
+      // Étape 2 : un import ultérieur du même fichier républié révèle un
+      // second candidat du même nom dans la même circonscription. uniqueInDistrict
+      // devient faux pour JD : la corroboration élection puis mandat ne
+      // s'applique plus, exactement le cas Sandrine Rousseau — mais découvert
+      // au réimport plutôt qu'au premier passage.
+      await writeFile(
+        avecHomonyme,
+        [
+          CNCCFP_MINIMAL_HEADER,
+          cnccfpRow({
+            candidat: JD,
+            nom: 'M. DUPONT Jean',
+            circonscription: 'Ain - 1re circonscription',
+            departement: 'Ain',
+            codeDepartement: '1',
+          }),
+          cnccfpRow({
+            candidat: HOMONYME,
+            nom: 'M. DUPONT Jean',
+            circonscription: 'Ain - 1re circonscription',
+            departement: 'Ain',
+            codeDepartement: '1',
+          }),
+        ].join('\n') + '\n',
+        'latin1',
+      )
+      const run2Descriptor: ResourceDescriptor = { ...descriptor, resourceExternalId: 'avec-homonyme.csv' }
+      const run2 = await openImportRun(prisma, run2Descriptor, 'c-downgrade-2')
+      if (!run2) throw new Error('run attendu')
+      await stageCnccfp(prisma, avecHomonyme, run2)
+      await normalizeCnccfp(prisma, run2)
+
+      const apres = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${JD}` } })
+      expect(apres.personId).toBeNull()
+      const matchApres = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'CNCCFP', sourceKey: JD },
+      })
+      expect(['PROBABLE', 'AMBIGUOUS']).toContain(matchApres.confidence)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })

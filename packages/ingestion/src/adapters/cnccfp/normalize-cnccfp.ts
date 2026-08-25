@@ -215,11 +215,20 @@ export async function normalizeCnccfp(
       uniqueInDistrict: districtNameKey !== null && countByDistrictAndName.get(districtNameKey) === 1,
     }
 
+    // Ne JAMAIS attacher l'identifiant candidat CNCCFP à la personne : à la
+    // différence du RNE (nom + date de naissance, un fait immuable), le seul
+    // chemin CNCCFP vers CONFIRMED est le niveau 2 bis (élection puis mandat),
+    // dont la preuve — `uniqueInDistrict` — est un instantané recalculé à
+    // chaque import sur l'ensemble du fichier. L'attacher figerait ce verdict
+    // pour de bon : un réimport ultérieur retrouverait la personne au niveau 1
+    // (identifiant externe déjà connu) et ne reconsidérerait plus jamais la
+    // preuve, même si un homonyme découvert entretemps devrait la retirer.
+    // Sans attache, chaque import recalcule le verdict à neuf, et le
+    // rattachement de la Candidacy (plus bas) suit alors fidèlement.
     const verdict = await resolveAndRecordIdentity(prisma, index, decisions, {
       sourceId: CNCCFP_SOURCE,
       sourceKey: entry.candidat,
       candidate,
-      attachExternalIdentifier: { kind: CNCCFP_CANDIDATE_ID_KIND, value: entry.candidat },
     })
     if (!verdict.autoMergeable) report.pending++
 
