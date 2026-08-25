@@ -1023,53 +1023,27 @@ Aucun test ne doit toucher le réseau. On fabrique une archive de test à partir
 - Create: `packages/ingestion/fixtures/an-amo10-sample.zip`, `packages/ingestion/scripts/build-fixture.mjs`, `packages/ingestion/src/zip.ts`
 - Test: `packages/ingestion/tests/zip.test.ts`
 
-- [ ] **Step 1 : Script de fabrication de la fixture**
+- [ ] **Step 1 : Fixture (déjà construite et commitée)**
 
-`packages/ingestion/scripts/build-fixture.mjs` — à lancer une fois, avec l'archive réelle téléchargée :
+`packages/ingestion/fixtures/an-amo10-sample.zip` est présente dans le dépôt, accompagnée de `packages/ingestion/scripts/build-fixture.py` qui l'a produite.
 
-```js
-// Usage: node scripts/build-fixture.mjs <AMO10.json.zip> <sortie.zip>
-import { createWriteStream } from 'node:fs'
-import { open } from 'yauzl-promise'
-import archiver from 'archiver'
+**Contenu : 3 acteurs, 44 mandats, 36 organes**, soit 23 Ko.
 
-const [, , input, output] = process.argv
-const KEEP_ACTEURS = 3
-const KEEP_ORGANES = 8
+La règle de construction est essentielle : on retient quelques acteurs, puis **tous les organes que leurs mandats référencent**. Prendre les N premiers organes de l'archive donnerait une fixture où aucun mandat ne trouve son organe — la normalisation n'aurait rien à rattacher et les tests de la Task 14 vaudraient zéro.
 
-const zip = await open(input)
-const archive = archiver('zip', { zlib: { level: 9 } })
-archive.pipe(createWriteStream(output))
+Les trois acteurs sont réels et choisis pour ce qu'ils exercent : Michel Barnier (mandats variés, mandat parlementaire avec circonscription et suppléant), Alexandra Martin (homonyme réelle — deux députées de la 17e portent ce nom, l'AN les distingue par le département glissé dans le champ `nom`), Antoine Golliot (volume de mandats élevé).
 
-let acteurs = 0
-let organes = 0
-for await (const entry of zip) {
-  const isActeur = entry.filename.startsWith('json/acteur/')
-  const isOrgane = entry.filename.startsWith('json/organe/')
-  if (isActeur && acteurs >= KEEP_ACTEURS) continue
-  if (isOrgane && organes >= KEEP_ORGANES) continue
-  if (!isActeur && !isOrgane) continue
-  const stream = await entry.openReadStream()
-  const chunks = []
-  for await (const chunk of stream) chunks.push(chunk)
-  archive.append(Buffer.concat(chunks), { name: entry.filename })
-  if (isActeur) acteurs++
-  if (isOrgane) organes++
-}
-await zip.close()
-await archive.finalize()
-console.log(`fixture: ${acteurs} acteurs, ${organes} organes`)
-```
+Répartition des 36 organes par `codeType` : `GA` 9, `GE` 10, `COMPER` 3, `CIRCONSCRIPTION` 3, `PARPOL` 2, `GP` 2, `CNPS` 2, `COMNL` 1, `ORGEXTPARL` 1, `DELEG` 1, `MISINFO` 1, `ASSEMBLEE` 1.
 
-Lancer :
+Après application de `bodyTypeFromOrganeCode`, cela donne **8 `Body`** (2 `GP` + 3 `COMPER` + 1 `COMNL` + 1 `DELEG` + 1 `MISINFO`) et **3 `Territory`** (les circonscriptions). Les autres codes ne sont pas modélisés en V1 et sont ignorés.
+
+Pour la régénérer depuis une archive fraîche :
 
 ```bash
-pnpm --filter @poligraph/ingestion add -D archiver
-curl -sSL -o /tmp/AMO10.json.zip "https://data.assemblee-nationale.fr/static/openData/repository/17/amo/deputes_actifs_mandats_actifs_organes/AMO10_deputes_actifs_mandats_actifs_organes.json.zip"
-node packages/ingestion/scripts/build-fixture.mjs /tmp/AMO10.json.zip packages/ingestion/fixtures/an-amo10-sample.zip
+python packages/ingestion/scripts/build-fixture.py <AMO10.json.zip> packages/ingestion/fixtures/an-amo10-sample.zip
 ```
 
-Expected: `fixture: 3 acteurs, 8 organes`.
+> Constat de mesure : dans `AMO10`, le nœud `mandats.mandat` est **toujours** un tableau, jamais un objet seul. Aucun test de cette fixture n'exercera donc `asArray` sur le cas dégénéré ; le helper reste justifié pour les autres nœuds et pour les archives des législatures antérieures.
 
 - [ ] **Step 2 : Écrire le test qui échoue**
 
@@ -1609,9 +1583,9 @@ describe('stageOrganes', () => {
 
     const report = await stageOrganes(prisma, FIXTURE, run)
 
-    expect(report.staged).toBe(8)
+    expect(report.staged).toBe(36)
     expect(report.rejected).toBe(0)
-    expect(await prisma.anOrganeRaw.count()).toBe(8)
+    expect(await prisma.anOrganeRaw.count()).toBe(36)
   })
 
   it('conserve le codeType et le libellé tels que publiés', async () => {
@@ -1630,7 +1604,7 @@ describe('stageOrganes', () => {
     await stageOrganes(prisma, FIXTURE, run)
     await stageOrganes(prisma, FIXTURE, run)
 
-    expect(await prisma.anOrganeRaw.count()).toBe(8)
+    expect(await prisma.anOrganeRaw.count()).toBe(36)
   })
 })
 ```
@@ -2294,12 +2268,22 @@ describe('normalizeAn', () => {
     expect(identifiers.every((i) => i.value.startsWith('PA'))).toBe(true)
   })
 
-  it('crée les groupes politiques comme Body de type PARLIAMENTARY_GROUP', async () => {
+  it('crée un Body par organe modélisé, et rien pour les autres', async () => {
     const run = await stageFixture('c1')
     await normalizeAn(prisma, run)
 
-    const groups = await prisma.body.findMany({ where: { type: 'PARLIAMENTARY_GROUP' } })
-    expect(groups.length).toBeGreaterThanOrEqual(0)
+    // La fixture porte 2 GP, 3 COMPER, 1 COMNL, 1 DELEG, 1 MISINFO = 8 organes modélisés.
+    // Les GA, GE, PARPOL, CNPS, ORGEXTPARL et ASSEMBLEE ne le sont pas en V1.
+    expect(await prisma.body.count()).toBe(8)
+    expect(await prisma.body.count({ where: { type: 'PARLIAMENTARY_GROUP' } })).toBe(2)
+    expect(await prisma.body.count({ where: { type: 'COMMITTEE' } })).toBe(4)
+  })
+
+  it('crée un Territory par circonscription, jamais un Body', async () => {
+    const run = await stageFixture('c1')
+    await normalizeAn(prisma, run)
+
+    expect(await prisma.territory.count({ where: { type: 'CIRCONSCRIPTION' } })).toBe(3)
   })
 
   it('ne crée pas de Body pour une circonscription', async () => {
