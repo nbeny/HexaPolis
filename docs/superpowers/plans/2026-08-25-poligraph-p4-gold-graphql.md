@@ -401,26 +401,38 @@ Le plan 5 (front Next.js) et le plan 6 (résultats électoraux data.gouv) parten
 
 ---
 
-## Validation des tests sur cette machine
+## Validation des tests : la cause de l'instabilite, trouvee
 
-**Constat, mesuré.** La suite d'intégration complète de `packages/ingestion` dure entre 280 et 520 secondes, et la redirection de port de Docker Desktop lâche sur cette durée. Le symptôme est caractéristique : **les fichiers en échec changent d'une exécution à l'autre**, et chacun passe isolément en moins de quinze secondes. Les erreurs nomment des internes Prisma (`PrismaClientKnownRequestError`, `Can't reach database server`) et non des valeurs attendues — c'est ce qui les distingue d'un vrai échec d'assertion.
+**Symptome.** Pendant plusieurs heures, la suite d'integration complete de
+`packages/ingestion` a echoue de facon erratique : entre 4 et 13 fichiers en
+echec, **differents a chaque execution**, alors que chaque fichier passait
+isolement. Les erreurs nommaient des internes Prisma
+(`PrismaClientKnownRequestError`, `Can't reach database server`) et non des
+valeurs attendues.
 
-Ce n'est pas un défaut du code. Vérifié séparément à trois reprises, dont une où un jeu de données parfaitement correct a failli être « corrigé » pour rien.
+**Cause reelle.** `localhost` resout **en IPv6 d'abord** (`::1`, puis
+`127.0.0.1`). Docker Desktop ecoute sur les deux, mais son proxy IPv6 lache
+sous charge soutenue. Toutes les connexions passant par `localhost` etaient
+donc exposees a une coupure aleatoire.
 
-Pistes écartées :
-- `connection_limit=1` **aggrave** le problème : 13 fichiers en échec au lieu de 4, et 520 s au lieu de 280.
-- La mémoire n'est pas en cause : le conteneur consomme 38 Mo sur 15,5 Go.
+**Correctif.** Forcer l'IPv4 dans les URL de connexion : `@127.0.0.1:5433` au
+lieu de `@localhost:5433`. Applique a `.env.example` et au workflow CI.
 
-**Mode de validation retenu, en attendant :** valider **un fichier à la fois**.
+**Resultat mesure.** La suite complete passe integralement :
 
-```bash
-cd packages/ingestion
-export DATABASE_URL_TEST="postgresql://poligraph:poligraph@localhost:5433/poligraph_test?schema=public"
-npx vitest run tests/<fichier>.test.ts
+```
+Test Files  20 passed (20)
+Tests      156 passed (156)
+Duration   183.76s
 ```
 
-En cas d'erreur de connexion : `docker restart poligraph-db`, attendre dix secondes, relancer. Ne jamais poursuivre un échec de connexion comme s'il s'agissait d'un défaut de logique — mais ne jamais écarter non plus un échec d'assertion reproductible comme s'il s'agissait d'instabilité.
+Pistes ecartees en chemin, pour memoire : `connection_limit=1` **aggrave** le
+probleme (13 fichiers en echec au lieu de 4, 520 s au lieu de 280) ; la memoire
+n'etait pas en cause (38 Mo consommes sur 15,5 Go).
 
-`packages/domain` ne touche pas la base : ses 66 tests se lancent en bloc sans difficulté.
-
-**Conséquence assumée.** L'intégration continue écrite au plan 1 (tâche 17) reste **une hypothèse non vérifiée** : rien ne tourne en bloc sur cette machine, et le dépôt n'a pas de remote GitHub. Elle devra être éprouvée avant d'être considérée comme acquise.
+**Lecon.** Un echec dont la composition change a chaque execution designe
+l'environnement, pas le code. Un agent a failli « corriger » un jeu de donnees
+parfaitement correct avant que la vraie cause ne soit trouvee : distinguer un
+echec de connexion (qui nomme des internes) d'un echec d'assertion (qui nomme
+une valeur attendue et une valeur recue) evite de reparer ce qui n'est pas
+casse.

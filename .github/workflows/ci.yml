@@ -28,8 +28,8 @@ jobs:
       # deploy` (Prisma ne lit pas non plus le .env racine, seul celui à côté
       # de prisma/schema.prisma) — vérifié localement en supprimant le .env
       # et en injectant les variables par le shell.
-      DATABASE_URL: postgresql://poligraph:poligraph@localhost:5433/poligraph_test?schema=public
-      DATABASE_URL_TEST: postgresql://poligraph:poligraph@localhost:5433/poligraph_test?schema=public
+      DATABASE_URL: postgresql://poligraph:poligraph@127.0.0.1:5433/poligraph_test?schema=public
+      DATABASE_URL_TEST: postgresql://poligraph:poligraph@127.0.0.1:5433/poligraph_test?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
