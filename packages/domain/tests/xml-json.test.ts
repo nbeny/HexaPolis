@@ -21,6 +21,10 @@ describe('nilToNull', () => {
     expect(nilToNull({ '@xsi:nil': 'true' })).toBeNull()
   })
 
+  it("laisse un xsi:nil à 'false' inchangé (présent, non nul)", () => {
+    expect(nilToNull({ '@xsi:nil': 'false' })).toEqual({ '@xsi:nil': 'false' })
+  })
+
   it('laisse une chaîne inchangée', () => {
     expect(nilToNull('2025-09-28')).toBe('2025-09-28')
   })
@@ -41,5 +45,13 @@ describe('textOf', () => {
 
   it('renvoie null pour une valeur absente', () => {
     expect(textOf(null)).toBeNull()
+  })
+
+  it('coerce un #text numérique en chaîne', () => {
+    expect(textOf({ '#text': 42 })).toBe('42')
+  })
+
+  it("renvoie null quand la clé #text est absente de l'objet", () => {
+    expect(textOf({})).toBeNull()
   })
 })
