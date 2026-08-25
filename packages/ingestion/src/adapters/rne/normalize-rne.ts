@@ -72,6 +72,9 @@ export async function normalizeRne(
         birthDate: row.dateNaissance,
         districtCode: normalizeDistrictCode(row.codeCirconscription),
         externalIds: [{ source: RNE_SOURCE, kind: RNE_DERIVED_KEY_KIND, value: sourceKey }],
+        // Le RNE ne rapporte pas d'élection ; seule la CNCCFP renseigne ces champs.
+        electionDate: null,
+        uniqueInDistrict: false,
       },
     })
   }

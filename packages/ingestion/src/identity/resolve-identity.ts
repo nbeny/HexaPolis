@@ -66,6 +66,9 @@ export async function buildKnownPersonIndex(prisma: PrismaClient): Promise<Known
           person.mandates.map((mandate) => mandate.territory?.code).filter((code): code is string => Boolean(code)),
         ),
       ],
+      // Non alimenté avant la Task 2 : la corroboration élection puis mandat
+      // (niveau 2 bis) reste inactive tant que ce champ n'est pas peuplé.
+      mandates: [],
     }
 
     const bucket = byMatchKey.get(known.matchKey) ?? []

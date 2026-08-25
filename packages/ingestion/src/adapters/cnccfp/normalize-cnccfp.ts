@@ -177,6 +177,9 @@ export async function normalizeCnccfp(
       birthDate: null,
       districtCode: entry.circonscriptionCode,
       externalIds: [{ source: CNCCFP_SOURCE, kind: CNCCFP_CANDIDATE_ID_KIND, value: entry.candidat }],
+      // Peuplés par la Task 2, qui alimente le niveau élection puis mandat.
+      electionDate: null,
+      uniqueInDistrict: false,
     }
 
     const verdict = await resolveAndRecordIdentity(prisma, index, decisions, {

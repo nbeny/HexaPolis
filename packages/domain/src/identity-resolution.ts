@@ -18,6 +18,8 @@ export interface KnownPerson {
   birthDate: string | null
   externalIds: ExternalIdRef[]
   districtCodes: string[]
+  /** Mandats connus, pour corroborer une candidature par le mandat qui l'a suivie. */
+  mandates: { territoryCode: string; startDate: string | null }[]
 }
 
 export interface IdentityCandidate {
@@ -25,6 +27,10 @@ export interface IdentityCandidate {
   birthDate: string | null
   externalIds: ExternalIdRef[]
   districtCode: string | null
+  /** Date de l'élection à laquelle se rapporte ce candidat, si la source en désigne une. */
+  electionDate: string | null
+  /** Vrai si un seul candidat de ce nom se présentait dans cette circonscription. */
+  uniqueInDistrict: boolean
 }
 
 export interface IdentityVerdict {
@@ -111,6 +117,40 @@ export function resolveIdentity(
       (person) => person.birthDate === null || person.birthDate === candidate.birthDate,
     )
     if (homonymes.length === 0) return unmatched
+  }
+
+  // Niveau 2 bis — élection puis mandat.
+  // Un député siégeant dans la circonscription où un candidat du même nom s'est
+  // présenté, avec un mandat commençant après ce scrutin, EST ce candidat —
+  // à condition qu'un seul candidat de ce nom s'y présentait. Deux homonymes
+  // dans la même circonscription rendent la corroboration muette.
+  if (candidate.districtCode && candidate.electionDate && candidate.uniqueInDistrict) {
+    const corrobores = homonymes.filter((person) =>
+      person.mandates.some(
+        (mandat) =>
+          mandat.territoryCode === candidate.districtCode &&
+          mandat.startDate !== null &&
+          mandat.startDate >= (candidate.electionDate as string),
+      ),
+    )
+    if (corrobores.length === 1 && corrobores[0]) {
+      return {
+        confidence: 'CONFIRMED',
+        personId: corrobores[0].personId,
+        autoMergeable: true,
+        evidence: ['NAME', 'DISTRICT', 'ELECTED_MANDATE'],
+        alternatives: [],
+      }
+    }
+    if (corrobores.length > 1) {
+      return {
+        confidence: 'AMBIGUOUS',
+        personId: null,
+        autoMergeable: false,
+        evidence: ['NAME', 'DISTRICT', 'ELECTED_MANDATE'],
+        alternatives: corrobores.map((person) => person.personId),
+      }
+    }
   }
 
   // Niveau 3 — circonscription.
