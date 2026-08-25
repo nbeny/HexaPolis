@@ -530,6 +530,38 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
     expect(candidacy.personId).toBe(bretonId)
   })
 
+  it("rétro-alimente second_round_date sur une Election déjà en base (créée avant cette fonctionnalité), sans quoi la corroboration reste muette", async () => {
+    // Reproduit exactement l'état réel constaté en base de dev : l'Election a
+    // été créée par un import antérieur à l'ajout de `secondRoundDate`, elle
+    // existe donc déjà avec cette colonne à null. Un `upsert` dont la branche
+    // `update` ne touche pas `secondRoundDate` laisserait la corroboration
+    // silencieusement désactivée pour toujours, sans qu'aucun test sur base
+    // vierge ne le détecte jamais (`resetDatabase` repart toujours de zéro).
+    await prisma.election.create({
+      data: {
+        naturalKey: 'legislatives-2022',
+        type: 'LEGISLATIVE',
+        label: 'Élections législatives 2022',
+        year: 2022,
+        secondRoundDate: null,
+      },
+    })
+
+    const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const election = await prisma.election.findUniqueOrThrow({ where: { naturalKey: 'legislatives-2022' } })
+    expect(election.secondRoundDate).not.toBeNull()
+
+    const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
+    expect(match.confidence).toBe('CONFIRMED')
+    expect(match.evidence).toContain('ELECTED_MANDATE')
+
+    const candidacy = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(candidacy.personId).toBe(bretonId)
+  })
+
   it('les deux Sandrine Rousseau restent non rattachées malgré des mandats post-élection : uniqueInDistrict est faux pour les deux', async () => {
     await seedDeuxSandrineRousseauMemeCirconscription()
     const run = await stageCnccfpFixture('c1')

@@ -170,7 +170,14 @@ export async function normalizeCnccfp(
 
   const election = await prisma.election.upsert({
     where: { naturalKey: ELECTION_NATURAL_KEY },
-    update: {},
+    // `secondRoundDate` doit être rétro-alimentée même sur une `Election`
+    // déjà en base : ce champ n'existait pas avant la Task 2, si bien que la
+    // base de dev porte déjà une ligne `legislatives-2022` créée par un
+    // import antérieur, avec cette colonne à `null`. Laisser `update: {}`
+    // aurait désactivé silencieusement toute corroboration « élection puis
+    // mandat » pour de bon, sans qu'aucun test sur base vierge (toujours
+    // repartie de zéro) ne puisse jamais le détecter.
+    update: { secondRoundDate: SECOND_ROUND_DATE_2022 },
     create: {
       naturalKey: ELECTION_NATURAL_KEY,
       type: 'LEGISLATIVE',
