@@ -1,8 +1,8 @@
 import type { PrismaClient } from '@poligraph/db'
-import { nilToNull } from '@poligraph/domain'
 import type { ImportRunRef, StageReport } from '../../contract.js'
 import { recordRejection } from '../../run/import-run.js'
 import { readJsonEntries } from '../../zip.js'
+import { rawString } from './raw-value.js'
 
 interface OrganeNode {
   uid?: string
@@ -18,11 +18,6 @@ interface OrganeNode {
     region?: { libelle?: unknown }
     departement?: { code?: unknown }
   }
-}
-
-function str(value: unknown): string | null {
-  const cleaned = nilToNull(value)
-  return typeof cleaned === 'string' ? cleaned : null
 }
 
 export async function stageOrganes(
@@ -53,16 +48,16 @@ export async function stageOrganes(
         importRunId: run.id,
         uid: organe.uid,
         codeType: organe.codeType,
-        libelle: str(organe.libelle),
-        libelleAbrege: str(organe.libelleAbrege),
-        libelleAbrev: str(organe.libelleAbrev),
-        dateDebut: str(organe.viMoDe?.dateDebut),
-        dateFin: str(organe.viMoDe?.dateFin),
-        legislature: str(organe.legislature),
-        numero: str(organe.numero),
-        regionLibelle: str(organe.lieu?.region?.libelle),
-        departementCode: str(organe.lieu?.departement?.code),
-        couleurAssociee: str(organe.couleurAssociee),
+        libelle: rawString(organe.libelle),
+        libelleAbrege: rawString(organe.libelleAbrege),
+        libelleAbrev: rawString(organe.libelleAbrev),
+        dateDebut: rawString(organe.viMoDe?.dateDebut),
+        dateFin: rawString(organe.viMoDe?.dateFin),
+        legislature: rawString(organe.legislature),
+        numero: rawString(organe.numero),
+        regionLibelle: rawString(organe.lieu?.region?.libelle),
+        departementCode: rawString(organe.lieu?.departement?.code),
+        couleurAssociee: rawString(organe.couleurAssociee),
         payload: organe as object,
       },
     })
