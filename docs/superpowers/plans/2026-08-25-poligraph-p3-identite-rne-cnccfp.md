@@ -429,7 +429,7 @@ git add packages/domain
 git commit -m "feat(domain): cascade de resolution d'identite"
 ```
 
-Expected: 9 nouveaux tests, 50 au total dans `domain`.
+Expected: 9 nouveaux tests, 50 au total dans `domain`. (Un correctif ulterieur, elaguant les homonymes refutes par leur date de naissance, en ajoute 4 : 54.)
 
 ---
 
@@ -547,7 +547,7 @@ export function splitCnccfpName(raw: string): CnccfpName | null {
 git commit -m "feat(domain): decoupage des noms CNCCFP"
 ```
 
-Expected: 6 nouveaux tests, 56 au total dans `domain`.
+Expected: 6 nouveaux tests, 60 au total dans `domain`.
 
 ---
 
