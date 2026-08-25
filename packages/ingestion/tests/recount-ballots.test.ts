@@ -114,4 +114,18 @@ describe('recountBallots', () => {
     expect(report.skipped).toBe(0)
     expect(report.mismatches).toHaveLength(0)
   })
+
+  it('ne recompte pas en double un scrutin republié dans un nouvel import', async () => {
+    // L'AN republie régulièrement Scrutins.json.zip. Un nouveau checksum ouvre
+    // un nouveau run, et le bronze garde l'ancienne ligne : les deux jeux de
+    // lignes bronze coexistent pour les mêmes scrutins, exactement comme le
+    // laisserait une vraie republication.
+    await stage(ECLATES, 'c5-premier-import')
+    await stage(ECLATES, 'c5-second-import')
+
+    const report = await recountBallots(prisma)
+
+    expect(report.checked).toBe(5)
+    expect(report.mismatches).toHaveLength(0)
+  })
 })
