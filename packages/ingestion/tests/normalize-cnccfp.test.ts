@@ -69,9 +69,48 @@ async function seedXavierBretonSansDateNaissance(): Promise<string> {
   return person.id
 }
 
+/** Xavier Breton connu, avec un mandat dont la date de début est fournie —
+ * pour exercer le niveau « élection puis mandat » (Task 2) : corroboration si
+ * le mandat suit l'élection, silence s'il la précède. */
+async function seedXavierBretonAvecMandat(startDate: string): Promise<string> {
+  const institution = await prisma.institution.upsert({
+    where: { code: 'TEST_INSTITUTION' },
+    update: {},
+    create: { code: 'TEST_INSTITUTION', label: 'Institution de test' },
+  })
+  const territory = await prisma.territory.upsert({
+    where: { type_code: { type: 'CIRCONSCRIPTION', code: '01-1' } },
+    update: {},
+    create: { type: 'CIRCONSCRIPTION', code: '01-1', label: "1ère circonscription de l'Ain" },
+  })
+  const person = await prisma.person.create({
+    data: {
+      displayName: 'Xavier Breton',
+      firstName: 'Xavier',
+      lastName: 'Breton',
+      matchKey: 'xavier|breton',
+      birthDate: null,
+    },
+  })
+  await prisma.mandate.create({
+    data: {
+      naturalKey: `test-breton-mandat-${person.id}`,
+      personId: person.id,
+      institutionId: institution.id,
+      territoryId: territory.id,
+      kind: 'PARLIAMENTARY',
+      startDate: new Date(startDate),
+    },
+  })
+  return person.id
+}
+
 /** Deux Sandrine Rousseau déjà connues, homonymes exactes, toutes deux
  * rattachées à la même circonscription (Paris 9e) — le cas réel qui justifie
- * l'arbitrage : ni le nom, ni la circonscription ne les départagent. */
+ * l'arbitrage : ni le nom, ni la circonscription ne les départagent. Chacune
+ * porte un mandat dont la date suit l'élection : si l'unicité par
+ * circonscription n'était pas correctement calculée à faux pour les deux, la
+ * corroboration « élection puis mandat » les confirmerait à tort. */
 async function seedDeuxSandrineRousseauMemeCirconscription(): Promise<{ ecoId: string; dvdId: string }> {
   const institution = await prisma.institution.upsert({
     where: { code: 'TEST_INSTITUTION' },
@@ -100,6 +139,7 @@ async function seedDeuxSandrineRousseauMemeCirconscription(): Promise<{ ecoId: s
       institutionId: institution.id,
       territoryId: territory.id,
       kind: 'PARLIAMENTARY',
+      startDate: new Date('2022-06-20'),
     },
   })
 
@@ -119,6 +159,7 @@ async function seedDeuxSandrineRousseauMemeCirconscription(): Promise<{ ecoId: s
       institutionId: institution.id,
       territoryId: territory.id,
       kind: 'PARLIAMENTARY',
+      startDate: new Date('2022-06-20'),
     },
   })
 
@@ -142,6 +183,108 @@ async function seedToutesLesCirconscriptionsDeLaFixture(): Promise<void> {
       create: { type: 'CIRCONSCRIPTION', code, label },
     })
   }
+}
+
+const CNCCFP_MINIMAL_HEADER =
+  'candidat;nom;scrutin;circonscription;département;code département;nuance;monnaie;' +
+  'dépenses totales déclarées;recettes totales déclarées;dons déclarés;apport personnel déclaré;' +
+  'depenses totales retenues;recettes totales retenues;decision'
+
+function cnccfpRow(fields: {
+  candidat: string
+  nom: string
+  circonscription: string
+  departement: string
+  codeDepartement: string
+  nuance?: string
+}): string {
+  const { candidat, nom, circonscription, departement, codeDepartement, nuance = 'DIV' } = fields
+  // scrutin;monnaie;...montants absents (vide) ; decision "A".
+  return [candidat, nom, '202200999', circonscription, departement, codeDepartement, nuance, 'EURO', '', '', '', '', '', '', 'A'].join(
+    ';',
+  )
+}
+
+/**
+ * Construit un fichier CNCCFP synthétique où un second candidat du même nom,
+ * dans la même circonscription qu'un premier, n'apparaît qu'après un grand
+ * nombre d'autres lignes. Sert à prouver que le calcul de l'unicité se fait
+ * sur l'ensemble du fichier, jamais en flux : une implémentation qui compterait
+ * au fil de l'eau verrait le premier homonyme seul au moment de le résoudre,
+ * et le confirmerait à tort avant même d'avoir lu le second.
+ */
+async function ecrireCsvAvecHomonymeTardif(
+  path: string,
+  options: { firstCandidat: string; lastCandidat: string; fillerCount: number },
+): Promise<void> {
+  const { firstCandidat, lastCandidat, fillerCount } = options
+  const lines = [CNCCFP_MINIMAL_HEADER]
+  lines.push(
+    cnccfpRow({
+      candidat: firstCandidat,
+      nom: 'M. DUPONT Jean',
+      circonscription: 'Ain - 1re circonscription',
+      departement: 'Ain',
+      codeDepartement: '1',
+    }),
+  )
+  for (let i = 0; i < fillerCount; i++) {
+    lines.push(
+      cnccfpRow({
+        candidat: `FILLER-${i}`,
+        nom: `M. TEMOIN${i} Prenom${i}`,
+        circonscription: 'Filler - 1re circonscription',
+        departement: 'Filler',
+        codeDepartement: String(100 + i),
+      }),
+    )
+  }
+  lines.push(
+    cnccfpRow({
+      candidat: lastCandidat,
+      nom: 'M. DUPONT Jean',
+      circonscription: 'Ain - 1re circonscription',
+      departement: 'Ain',
+      codeDepartement: '1',
+    }),
+  )
+  await writeFile(path, lines.join('\n') + '\n', 'latin1')
+}
+
+/** Jean Dupont, connu, avec un mandat qui suivrait l'élection dans la 1ère
+ * circonscription de l'Ain — corroborant en apparence, sauf qu'un second
+ * candidat du même nom s'y présente aussi (voir `ecrireCsvAvecHomonymeTardif`). */
+async function seedJeanDupontAvecMandatPostElection(): Promise<string> {
+  const institution = await prisma.institution.upsert({
+    where: { code: 'TEST_INSTITUTION' },
+    update: {},
+    create: { code: 'TEST_INSTITUTION', label: 'Institution de test' },
+  })
+  const territory = await prisma.territory.upsert({
+    where: { type_code: { type: 'CIRCONSCRIPTION', code: '01-1' } },
+    update: {},
+    create: { type: 'CIRCONSCRIPTION', code: '01-1', label: "1ère circonscription de l'Ain" },
+  })
+  const person = await prisma.person.create({
+    data: {
+      displayName: 'Jean Dupont',
+      firstName: 'Jean',
+      lastName: 'Dupont',
+      matchKey: 'jean|dupont',
+      birthDate: null,
+    },
+  })
+  await prisma.mandate.create({
+    data: {
+      naturalKey: `test-dupont-mandat-${person.id}`,
+      personId: person.id,
+      institutionId: institution.id,
+      territoryId: territory.id,
+      kind: 'PARLIAMENTARY',
+      startDate: new Date('2022-06-22'),
+    },
+  })
+  return person.id
 }
 
 beforeEach(async () => {
@@ -369,5 +512,128 @@ describe('normalizeCnccfp', () => {
     expect(await prisma.campaignAccount.count()).toBe(counts.campaignAccount)
     expect(await prisma.election.count()).toBe(counts.election)
     expect(await prisma.identityMatch.count()).toBe(counts.identityMatch)
+  })
+})
+
+describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
+  it('Xavier Breton, mandat au 2022-06-22 dans 01-1, résout CONFIRMED et sa candidature est rattachée', async () => {
+    const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
+    expect(match.confidence).toBe('CONFIRMED')
+    expect(match.personId).toBe(bretonId)
+    expect(match.evidence).toContain('ELECTED_MANDATE')
+
+    const candidacy = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(candidacy.personId).toBe(bretonId)
+  })
+
+  it('les deux Sandrine Rousseau restent non rattachées malgré des mandats post-élection : uniqueInDistrict est faux pour les deux', async () => {
+    await seedDeuxSandrineRousseauMemeCirconscription()
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const candidacies = await prisma.candidacy.findMany({
+      where: { naturalKey: { in: [`cnccfp|${ROUSSEAU_ECO}`, `cnccfp|${ROUSSEAU_DVD}`] } },
+    })
+    expect(candidacies).toHaveLength(2)
+    expect(candidacies.every((c) => c.personId === null)).toBe(true)
+
+    const matches = await prisma.identityMatch.findMany({
+      where: { sourceId: 'CNCCFP', sourceKey: { in: [ROUSSEAU_ECO, ROUSSEAU_DVD] } },
+    })
+    expect(matches.every((m) => m.confidence !== 'CONFIRMED')).toBe(true)
+    expect(matches.every((m) => m.personId === null)).toBe(true)
+  })
+
+  it('un mandat antérieur à l’élection ne corrobore pas : le candidat reste PROBABLE, non rattaché', async () => {
+    const bretonId = await seedXavierBretonAvecMandat('2017-06-21')
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
+    expect(match.confidence).toBe('PROBABLE')
+    expect(match.personId).toBe(bretonId)
+    expect(match.evidence).not.toContain('ELECTED_MANDATE')
+
+    const candidacy = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(candidacy.personId).toBeNull()
+  })
+
+  it('un mandat démarrant le jour même de l’élection corrobore (>=, pas >)', async () => {
+    const bretonId = await seedXavierBretonAvecMandat('2022-06-19')
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
+    expect(match.confidence).toBe('CONFIRMED')
+    expect(match.evidence).toContain('ELECTED_MANDATE')
+
+    const candidacy = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(candidacy.personId).toBe(bretonId)
+  })
+
+  it("l'unicité se calcule sur tout le fichier : un homonyme tardif défait le premier candidat, même bien avant lui dans le fichier", async () => {
+    const dupontId = await seedJeanDupontAvecMandatPostElection()
+
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-cnccfp-homonyme-tardif-'))
+    const path = join(dir, 'homonyme-tardif.csv')
+    try {
+      const FIRST = 'HOM-A'
+      const LAST = 'HOM-B'
+      // Le nombre de lignes de remplissage n'a pas besoin d'être grand pour
+      // démontrer le défaut d'une implémentation en flux : il suffit que le
+      // second homonyme ne soit pas la ligne immédiatement suivante. 50 lignes
+      // séparent les deux Jean Dupont, assez pour qu'un comptage "au fil de
+      // l'eau" ait déjà rendu son verdict sur le premier avant de lire le
+      // second — tout en gardant la suite rapide à rejouer.
+      await ecrireCsvAvecHomonymeTardif(path, { firstCandidat: FIRST, lastCandidat: LAST, fillerCount: 50 })
+
+      const runDescriptor: ResourceDescriptor = { ...descriptor, resourceExternalId: 'homonyme-tardif.csv' }
+      const run = await openImportRun(prisma, runDescriptor, 'c-homonyme-tardif')
+      if (!run) throw new Error('run attendu')
+      await stageCnccfp(prisma, path, run)
+
+      await normalizeCnccfp(prisma, run)
+
+      // Le premier candidat (ligne 2) ne doit JAMAIS être confirmé : un
+      // deuxième homonyme dans la même circonscription apparaît 500 lignes
+      // plus loin. Une implémentation qui compterait au fil de l'eau le
+      // verrait seul au moment de le résoudre et le confirmerait à tort.
+      const firstMatch = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'CNCCFP', sourceKey: FIRST },
+      })
+      expect(firstMatch.confidence).not.toBe('CONFIRMED')
+
+      const firstCandidacy = await prisma.candidacy.findFirstOrThrow({
+        where: { naturalKey: `cnccfp|${FIRST}` },
+      })
+      expect(firstCandidacy.personId).toBeNull()
+
+      // Le mandat de Jean Dupont existe bel et bien et n'est écarté que par
+      // l'unicité, pas par une autre raison (district ou nom qui ne
+      // correspondrait pas).
+      expect(firstMatch.personId).toBe(dupontId)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }, 60_000)
+
+  it('est idempotent pour un rapprochement CONFIRMED : rejouer ne change ni le verdict ni le rattachement', async () => {
+    const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
+    const run = await stageCnccfpFixture('c1')
+    await normalizeCnccfp(prisma, run)
+
+    const before = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(before.personId).toBe(bretonId)
+
+    await normalizeCnccfp(prisma, run)
+
+    const after = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
+    expect(after.personId).toBe(bretonId)
+    expect(await prisma.candidacy.count()).toBe(10)
+    expect(await prisma.identityMatch.count({ where: { sourceId: 'CNCCFP' } })).toBe(10)
   })
 })

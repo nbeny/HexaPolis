@@ -37,7 +37,7 @@ export async function buildKnownPersonIndex(prisma: PrismaClient): Promise<Known
       id: true,
       matchKey: true,
       birthDate: true,
-      mandates: { select: { territory: { select: { code: true } } } },
+      mandates: { select: { startDate: true, territory: { select: { code: true } } } },
     },
   })
 
@@ -66,9 +66,16 @@ export async function buildKnownPersonIndex(prisma: PrismaClient): Promise<Known
           person.mandates.map((mandate) => mandate.territory?.code).filter((code): code is string => Boolean(code)),
         ),
       ],
-      // Non alimenté avant la Task 2 : la corroboration élection puis mandat
-      // (niveau 2 bis) reste inactive tant que ce champ n'est pas peuplé.
-      mandates: [],
+      // Territoire et date de début de chaque mandat, pour la corroboration
+      // « élection puis mandat » (niveau 2 bis). Les dates sont normalisées en
+      // `YYYY-MM-DD` ici, une bonne fois, pour que la cascade — qui compare
+      // des chaînes, jamais des `Date` — les reçoive déjà comparables.
+      mandates: person.mandates
+        .filter((mandate) => mandate.territory?.code)
+        .map((mandate) => ({
+          territoryCode: mandate.territory?.code as string,
+          startDate: mandate.startDate ? mandate.startDate.toISOString().slice(0, 10) : null,
+        })),
     }
 
     const bucket = byMatchKey.get(known.matchKey) ?? []

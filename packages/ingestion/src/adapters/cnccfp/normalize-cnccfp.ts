@@ -9,6 +9,14 @@ import { recordRejection } from '../../run/import-run.js'
 const CNCCFP_SOURCE = 'CNCCFP' as const
 const CNCCFP_CANDIDATE_ID_KIND = 'CANDIDAT_ID'
 const ELECTION_NATURAL_KEY = 'legislatives-2022'
+/**
+ * Second tour des élections législatives 2022. Un mandat parlementaire
+ * commençant à cette date ou après corrobore la candidature qui l'a précédé
+ * (niveau 2 bis de la cascade). Portée par l'`Election`, jamais par la boucle
+ * de résolution : un futur import d'un autre scrutin fournira sa propre date,
+ * sans jamais retomber silencieusement sur celle-ci.
+ */
+const SECOND_ROUND_DATE_2022 = new Date('2022-06-19T00:00:00.000Z')
 
 /** Fichier d'arbitrages versionné, rejoué à chaque import. */
 const DEFAULT_DECISIONS_PATH = fileURLToPath(
@@ -168,18 +176,36 @@ export async function normalizeCnccfp(
       type: 'LEGISLATIVE',
       label: 'Élections législatives 2022',
       year: 2022,
+      secondRoundDate: SECOND_ROUND_DATE_2022,
     },
   })
+  const electionDate = election.secondRoundDate ? election.secondRoundDate.toISOString().slice(0, 10) : null
+
+  /**
+   * Unicité par circonscription, comptée sur l'ENSEMBLE du fichier importé
+   * avant de résoudre quoi que ce soit. Indispensable : un candidat vu tôt
+   * dans le fichier et son homonyme vu bien plus tard doivent tous deux savoir
+   * qu'ils sont deux, y compris celui déjà résolu au moment où l'autre est lu.
+   * Une version qui compterait au fil de la boucle de résolution confirmerait
+   * à tort le premier avant même d'avoir lu le second — précisément le cas
+   * Sandrine Rousseau que cette règle existe pour empêcher.
+   */
+  const countByDistrictAndName = new Map<string, number>()
+  for (const entry of exploitable) {
+    if (!entry.circonscriptionCode) continue
+    const key = `${entry.circonscriptionCode}|${entry.matchKey}`
+    countByDistrictAndName.set(key, (countByDistrictAndName.get(key) ?? 0) + 1)
+  }
 
   for (const entry of exploitable) {
+    const districtNameKey = entry.circonscriptionCode ? `${entry.circonscriptionCode}|${entry.matchKey}` : null
     const candidate: IdentityCandidate = {
       matchKey: entry.matchKey,
       birthDate: null,
       districtCode: entry.circonscriptionCode,
       externalIds: [{ source: CNCCFP_SOURCE, kind: CNCCFP_CANDIDATE_ID_KIND, value: entry.candidat }],
-      // Peuplés par la Task 2, qui alimente le niveau élection puis mandat.
-      electionDate: null,
-      uniqueInDistrict: false,
+      electionDate,
+      uniqueInDistrict: districtNameKey !== null && countByDistrictAndName.get(districtNameKey) === 1,
     }
 
     const verdict = await resolveAndRecordIdentity(prisma, index, decisions, {

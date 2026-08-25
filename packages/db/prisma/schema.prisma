@@ -10,10 +10,10 @@ datasource db {
 }
 
 model Source {
-  id        String    @id
-  label     String
-  homepage  String?
-  datasets  Dataset[]
+  id       String    @id
+  label    String
+  homepage String?
+  datasets Dataset[]
 
   @@map("source")
   @@schema("silver")
@@ -47,20 +47,20 @@ model DatasetResource {
 }
 
 model ImportRun {
-  id          String             @id @default(uuid())
-  resourceId  String             @map("resource_id")
-  checksum    String
-  startedAt   DateTime           @default(now()) @map("started_at")
-  finishedAt  DateTime?          @map("finished_at")
-  status      ImportRunStatus    @default(RUNNING)
-  staged      Int                @default(0)
-  created     Int                @default(0)
-  updated     Int                @default(0)
-  unchanged   Int                @default(0)
-  rejected    Int                @default(0)
-  pending     Int                @default(0)
-  resource    DatasetResource    @relation(fields: [resourceId], references: [id])
-  rejections  ImportRejection[]
+  id         String            @id @default(uuid())
+  resourceId String            @map("resource_id")
+  checksum   String
+  startedAt  DateTime          @default(now()) @map("started_at")
+  finishedAt DateTime?         @map("finished_at")
+  status     ImportRunStatus   @default(RUNNING)
+  staged     Int               @default(0)
+  created    Int               @default(0)
+  updated    Int               @default(0)
+  unchanged  Int               @default(0)
+  rejected   Int               @default(0)
+  pending    Int               @default(0)
+  resource   DatasetResource   @relation(fields: [resourceId], references: [id])
+  rejections ImportRejection[]
 
   @@map("import_run")
   @@schema("silver")
@@ -76,13 +76,13 @@ enum ImportRunStatus {
 }
 
 model ImportRejection {
-  id           String    @id @default(uuid())
-  importRunId  String    @map("import_run_id")
-  bronzeTable  String    @map("bronze_table")
-  bronzeRef    String?   @map("bronze_ref")
-  code         String
-  message      String
-  run          ImportRun @relation(fields: [importRunId], references: [id])
+  id          String    @id @default(uuid())
+  importRunId String    @map("import_run_id")
+  bronzeTable String    @map("bronze_table")
+  bronzeRef   String?   @map("bronze_ref")
+  code        String
+  message     String
+  run         ImportRun @relation(fields: [importRunId], references: [id])
 
   @@index([importRunId])
   @@map("import_rejection")
@@ -90,23 +90,23 @@ model ImportRejection {
 }
 
 model AnActeurRaw {
-  id           BigInt  @id @default(autoincrement())
-  importRunId  String  @map("import_run_id")
-  entryName    String  @map("entry_name")
-  uid          String
-  civ          String?
-  prenom       String?
-  nom          String?
-  alpha        String?
-  trigramme    String?
-  dateNais     String? @map("date_nais")
-  villeNais    String? @map("ville_nais")
-  depNais      String? @map("dep_nais")
-  paysNais     String? @map("pays_nais")
-  dateDeces    String? @map("date_deces")
-  profession   String?
-  uriHatvp     String? @map("uri_hatvp")
-  payload      Json
+  id          BigInt  @id @default(autoincrement())
+  importRunId String  @map("import_run_id")
+  entryName   String  @map("entry_name")
+  uid         String
+  civ         String?
+  prenom      String?
+  nom         String?
+  alpha       String?
+  trigramme   String?
+  dateNais    String? @map("date_nais")
+  villeNais   String? @map("ville_nais")
+  depNais     String? @map("dep_nais")
+  paysNais    String? @map("pays_nais")
+  dateDeces   String? @map("date_deces")
+  profession  String?
+  uriHatvp    String? @map("uri_hatvp")
+  payload     Json
 
   @@unique([importRunId, uid])
   @@index([uid])
@@ -164,21 +164,21 @@ model AnOrganeRaw {
 }
 
 model Person {
-  id             String               @id @default(uuid())
-  displayName    String               @map("display_name")
-  firstName      String               @map("first_name")
-  lastName       String               @map("last_name")
-  matchKey       String               @map("match_key")
-  civility       String?
-  birthDate      DateTime?            @map("birth_date")
-  birthPlace     String?              @map("birth_place")
-  deathDate      DateTime?            @map("death_date")
-  profession     String?
-  nameVariants   PersonNameVariant[]
-  mandates       Mandate[]
-  memberships    BodyMembership[]
+  id              String              @id @default(uuid())
+  displayName     String              @map("display_name")
+  firstName       String              @map("first_name")
+  lastName        String              @map("last_name")
+  matchKey        String              @map("match_key")
+  civility        String?
+  birthDate       DateTime?           @map("birth_date")
+  birthPlace      String?             @map("birth_place")
+  deathDate       DateTime?           @map("death_date")
+  profession      String?
+  nameVariants    PersonNameVariant[]
+  mandates        Mandate[]
+  memberships     BodyMembership[]
   ballotPositions BallotPosition[]
-  candidacies    Candidacy[]
+  candidacies     Candidacy[]
 
   @@index([matchKey])
   @@map("person")
@@ -186,11 +186,11 @@ model Person {
 }
 
 model PersonNameVariant {
-  id        String @id @default(uuid())
-  personId  String @map("person_id")
-  form      String
-  sourceId  String @map("source_id")
-  person    Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  personId String @map("person_id")
+  form     String
+  sourceId String @map("source_id")
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@unique([personId, form, sourceId])
   @@map("person_name_variant")
@@ -212,20 +212,20 @@ model ExternalIdentifier {
 }
 
 model Institution {
-  id        String    @id @default(uuid())
-  code      String    @unique
-  label     String
-  mandates  Mandate[]
+  id       String    @id @default(uuid())
+  code     String    @unique
+  label    String
+  mandates Mandate[]
 
   @@map("institution")
   @@schema("silver")
 }
 
 model Legislature {
-  id        String    @id @default(uuid())
-  number    Int       @unique
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
+  id        String                @id @default(uuid())
+  number    Int                   @unique
+  startDate DateTime?             @map("start_date")
+  endDate   DateTime?             @map("end_date")
   mandates  Mandate[]
   bodies    Body[]
   ballots   ParliamentaryBallot[]
@@ -235,15 +235,15 @@ model Legislature {
 }
 
 model Territory {
-  id             String      @id @default(uuid())
-  type           String
-  code           String
-  label          String
-  parentId       String?     @map("parent_id")
-  parent         Territory?  @relation("TerritoryParent", fields: [parentId], references: [id])
-  children       Territory[] @relation("TerritoryParent")
-  mandates       Mandate[]
-  candidacies    Candidacy[]
+  id          String      @id @default(uuid())
+  type        String
+  code        String
+  label       String
+  parentId    String?     @map("parent_id")
+  parent      Territory?  @relation("TerritoryParent", fields: [parentId], references: [id])
+  children    Territory[] @relation("TerritoryParent")
+  mandates    Mandate[]
+  candidacies Candidacy[]
 
   @@unique([type, code])
   @@map("territory")
@@ -282,34 +282,34 @@ model BodyMembership {
 }
 
 model Mandate {
-  id             String       @id @default(uuid())
-  naturalKey     String       @unique @map("natural_key")
-  personId       String       @map("person_id")
-  institutionId  String       @map("institution_id")
-  legislatureId  String?      @map("legislature_id")
-  territoryId    String?      @map("territory_id")
-  kind           String
-  startDate      DateTime?    @map("start_date")
-  endDate        DateTime?    @map("end_date")
-  endCause       String?      @map("end_cause")
-  person         Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
-  institution    Institution  @relation(fields: [institutionId], references: [id])
-  legislature    Legislature? @relation(fields: [legislatureId], references: [id])
-  territory      Territory?   @relation(fields: [territoryId], references: [id])
+  id            String       @id @default(uuid())
+  naturalKey    String       @unique @map("natural_key")
+  personId      String       @map("person_id")
+  institutionId String       @map("institution_id")
+  legislatureId String?      @map("legislature_id")
+  territoryId   String?      @map("territory_id")
+  kind          String
+  startDate     DateTime?    @map("start_date")
+  endDate       DateTime?    @map("end_date")
+  endCause      String?      @map("end_cause")
+  person        Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  institution   Institution  @relation(fields: [institutionId], references: [id])
+  legislature   Legislature? @relation(fields: [legislatureId], references: [id])
+  territory     Territory?   @relation(fields: [territoryId], references: [id])
 
   @@map("mandate")
   @@schema("silver")
 }
 
 model Provenance {
-  id          String   @id @default(uuid())
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
+  id          String  @id @default(uuid())
+  entityType  String  @map("entity_type")
+  entityId    String  @map("entity_id")
   field       String?
-  importRunId String   @map("import_run_id")
-  bronzeTable String   @map("bronze_table")
-  bronzeRef   String   @map("bronze_ref")
-  status      String   @default("OFFICIAL")
+  importRunId String  @map("import_run_id")
+  bronzeTable String  @map("bronze_table")
+  bronzeRef   String  @map("bronze_ref")
+  status      String  @default("OFFICIAL")
 
   @@index([entityType, entityId])
   @@map("provenance")
@@ -317,32 +317,32 @@ model Provenance {
 }
 
 model AnScrutinRaw {
-  id                    BigInt  @id @default(autoincrement())
-  importRunId           String  @map("import_run_id")
-  entryName             String  @map("entry_name")
-  uid                   String
-  numero                String?
-  legislature           String?
-  organeRef             String? @map("organe_ref")
-  sessionRef            String? @map("session_ref")
-  seanceRef             String? @map("seance_ref")
-  dateScrutin           String? @map("date_scrutin")
-  codeTypeVote          String? @map("code_type_vote")
-  libelleTypeVote       String? @map("libelle_type_vote")
-  typeMajorite          String? @map("type_majorite")
-  sortCode              String? @map("sort_code")
-  sortLibelle           String? @map("sort_libelle")
-  titre                 String?
-  demandeur             String?
-  modePublication       String? @map("mode_publication")
-  nombreVotants         String? @map("nombre_votants")
-  suffragesExprimes     String? @map("suffrages_exprimes")
-  nbrSuffragesRequis    String? @map("nbr_suffrages_requis")
-  decomptePour          String? @map("decompte_pour")
-  decompteContre        String? @map("decompte_contre")
-  decompteAbstentions   String? @map("decompte_abstentions")
-  decompteNonVotants    String? @map("decompte_non_votants")
-  payload               Json
+  id                  BigInt  @id @default(autoincrement())
+  importRunId         String  @map("import_run_id")
+  entryName           String  @map("entry_name")
+  uid                 String
+  numero              String?
+  legislature         String?
+  organeRef           String? @map("organe_ref")
+  sessionRef          String? @map("session_ref")
+  seanceRef           String? @map("seance_ref")
+  dateScrutin         String? @map("date_scrutin")
+  codeTypeVote        String? @map("code_type_vote")
+  libelleTypeVote     String? @map("libelle_type_vote")
+  typeMajorite        String? @map("type_majorite")
+  sortCode            String? @map("sort_code")
+  sortLibelle         String? @map("sort_libelle")
+  titre               String?
+  demandeur           String?
+  modePublication     String? @map("mode_publication")
+  nombreVotants       String? @map("nombre_votants")
+  suffragesExprimes   String? @map("suffrages_exprimes")
+  nbrSuffragesRequis  String? @map("nbr_suffrages_requis")
+  decomptePour        String? @map("decompte_pour")
+  decompteContre      String? @map("decompte_contre")
+  decompteAbstentions String? @map("decompte_abstentions")
+  decompteNonVotants  String? @map("decompte_non_votants")
+  payload             Json
 
   @@unique([importRunId, uid])
   @@index([uid])
@@ -370,23 +370,23 @@ model AnPositionRaw {
 }
 
 model ParliamentaryBallot {
-  id                  String           @id @default(uuid())
-  naturalKey          String           @unique @map("natural_key")
-  legislatureId       String?          @map("legislature_id")
-  number              String?
-  date                DateTime?
-  title               String?
-  voteTypeCode        String?          @map("vote_type_code")
-  voteTypeLabel       String?          @map("vote_type_label")
-  outcomeCode         String?          @map("outcome_code")
-  outcomeLabel        String?          @map("outcome_label")
-  publicationMode     String?          @map("publication_mode")
-  officialFor         Int?             @map("official_for")
-  officialAgainst     Int?             @map("official_against")
-  officialAbstention  Int?             @map("official_abstention")
-  officialNonVoting   Int?             @map("official_non_voting")
-  legislature         Legislature?     @relation(fields: [legislatureId], references: [id])
-  positions           BallotPosition[]
+  id                 String           @id @default(uuid())
+  naturalKey         String           @unique @map("natural_key")
+  legislatureId      String?          @map("legislature_id")
+  number             String?
+  date               DateTime?
+  title              String?
+  voteTypeCode       String?          @map("vote_type_code")
+  voteTypeLabel      String?          @map("vote_type_label")
+  outcomeCode        String?          @map("outcome_code")
+  outcomeLabel       String?          @map("outcome_label")
+  publicationMode    String?          @map("publication_mode")
+  officialFor        Int?             @map("official_for")
+  officialAgainst    Int?             @map("official_against")
+  officialAbstention Int?             @map("official_abstention")
+  officialNonVoting  Int?             @map("official_non_voting")
+  legislature        Legislature?     @relation(fields: [legislatureId], references: [id])
+  positions          BallotPosition[]
 
   @@index([date])
   @@map("parliamentary_ballot")
@@ -472,12 +472,17 @@ model PoliticalParty {
 }
 
 model Election {
-  id          String      @id @default(uuid())
-  naturalKey  String      @unique @map("natural_key")
-  type        String
-  label       String
-  year        Int
-  candidacies Candidacy[]
+  id              String      @id @default(uuid())
+  naturalKey      String      @unique @map("natural_key")
+  type            String
+  label           String
+  year            Int
+  // Date du second tour, utilisée pour corroborer une candidature par le
+  // mandat qui l'a suivie (niveau 2 bis de la cascade). Distincte de `year` :
+  // un futur import d'une autre élection porte sa propre date, jamais
+  // réutilisée depuis le scrutin de 2022.
+  secondRoundDate DateTime?   @map("second_round_date")
+  candidacies     Candidacy[]
 
   @@map("election")
   @@schema("silver")
