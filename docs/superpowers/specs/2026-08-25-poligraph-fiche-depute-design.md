@@ -267,6 +267,22 @@ Une ressource est identifiée par `(source, resourceId, checksum)`.
   corriger un parser et de rejouer l'import à partir du bronze.
 - En `silver`, tout est upsert par clé naturelle.
 
+### Limite connue : changer la formule d'une clé naturelle
+
+Une clé naturelle est calculée à partir des données, et non stockée par la source. Si sa formule
+change — parce qu'elle s'avérait insuffisamment discriminante —, les lignes déjà écrites conservent
+l'ancienne clé. La renormalisation ne les retrouve plus : au lieu de les mettre à jour, elle crée un
+jeu parallèle et laisse les anciennes orphelines.
+
+Constaté en conditions réelles : l'ajout de la qualité à la clé de `BodyMembership` a produit
+1382 nouvelles lignes à côté des 1323 existantes.
+
+Conséquence à retenir pour les plans suivants : **une modification de formule de clé naturelle est
+une migration de données, pas une correction de code.** Elle exige de purger les lignes de l'ancien
+format, ou de recalculer les clés existantes, avant de renormaliser. Tant que le `bronze` est
+conservé, l'état correct reste reconstructible sans nouveau téléchargement — c'est précisément à cela
+que sert l'archivage du brut.
+
 ### 6.3 Aucun échec silencieux
 
 Toute ligne non intégrée est enregistrée dans `ImportRejection` (run, référence bronze, code,
