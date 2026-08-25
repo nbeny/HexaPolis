@@ -1,8 +1,8 @@
 import { createServer, type Server } from 'node:http'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AssembleeNationaleClient } from '../src/http/an-client.js'
 import type { ResourceDescriptor } from '../src/contract.js'
 
@@ -73,5 +73,62 @@ describe('AssembleeNationaleClient', () => {
 
     await new Promise<void>((resolve) => failing.close(() => resolve()))
     await rm(emptyCache, { recursive: true, force: true })
+  })
+
+  it('retourne le même checksum et la même taille sur un hit de cache', async () => {
+    const hitServer = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/zip' })
+      res.end(Buffer.from('contenu-de-test'))
+    })
+    await new Promise<void>((resolve) => hitServer.listen(0, resolve))
+    const address = hitServer.address()
+    if (typeof address === 'string' || address === null) throw new Error('adresse invalide')
+
+    const hitCache = await mkdtemp(join(tmpdir(), 'poligraph-'))
+    const client = new AssembleeNationaleClient(hitCache)
+    const target = { ...descriptor(), url: `http://127.0.0.1:${address.port}/AMO10.json.zip` }
+
+    const first = await client.fetch(target)
+    const second = await client.fetch(target)
+
+    expect(second.checksum).toBe(first.checksum)
+    expect(second.bytes).toBe(first.bytes)
+
+    await new Promise<void>((resolve) => hitServer.close(() => resolve()))
+    await rm(hitCache, { recursive: true, force: true })
+  })
+
+  it('rejette un fichier de cache corrompu et retélécharge', async () => {
+    let corruptHits = 0
+    const corruptServer = createServer((_req, res) => {
+      corruptHits++
+      res.writeHead(200, { 'content-type': 'application/zip' })
+      res.end(Buffer.from('contenu-de-test'))
+    })
+    await new Promise<void>((resolve) => corruptServer.listen(0, resolve))
+    const address = corruptServer.address()
+    if (typeof address === 'string' || address === null) throw new Error('adresse invalide')
+
+    const corruptCache = await mkdtemp(join(tmpdir(), 'poligraph-'))
+    const client = new AssembleeNationaleClient(corruptCache)
+    const target = { ...descriptor(), url: `http://127.0.0.1:${address.port}/AMO10.json.zip` }
+
+    const first = await client.fetch(target)
+    expect(corruptHits).toBe(1)
+
+    const binPath = join(corruptCache, `${first.checksum}.bin`)
+    await writeFile(binPath, Buffer.from('donnees-corrompues'))
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const second = await client.fetch(target)
+
+    expect(corruptHits).toBe(2)
+    expect(second.checksum).toBe(first.checksum)
+    expect(second.bytes).toBe(first.bytes)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+
+    await new Promise<void>((resolve) => corruptServer.close(() => resolve()))
+    await rm(corruptCache, { recursive: true, force: true })
   })
 })
