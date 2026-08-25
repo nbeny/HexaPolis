@@ -80,7 +80,7 @@ Ce déstructurage est un travail de `parse`, qui appartient à `stage` selon la 
   "name": "hexapolis",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.32.1",
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "turbo run build",
@@ -3001,7 +3001,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
+        with: { version: 10 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
