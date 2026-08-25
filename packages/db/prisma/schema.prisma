@@ -88,3 +88,77 @@ model ImportRejection {
   @@map("import_rejection")
   @@schema("silver")
 }
+
+model AnActeurRaw {
+  id           BigInt  @id @default(autoincrement())
+  importRunId  String  @map("import_run_id")
+  entryName    String  @map("entry_name")
+  uid          String
+  civ          String?
+  prenom       String?
+  nom          String?
+  alpha        String?
+  trigramme    String?
+  dateNais     String? @map("date_nais")
+  villeNais    String? @map("ville_nais")
+  depNais      String? @map("dep_nais")
+  paysNais     String? @map("pays_nais")
+  dateDeces    String? @map("date_deces")
+  profession   String?
+  uriHatvp     String? @map("uri_hatvp")
+  payload      Json
+
+  @@unique([importRunId, uid])
+  @@index([uid])
+  @@map("an_acteur_raw")
+  @@schema("bronze")
+}
+
+model AnMandatRaw {
+  id                 BigInt  @id @default(autoincrement())
+  importRunId        String  @map("import_run_id")
+  uid                String
+  acteurRef          String  @map("acteur_ref")
+  legislature        String?
+  typeOrgane         String  @map("type_organe")
+  dateDebut          String? @map("date_debut")
+  dateFin            String? @map("date_fin")
+  codeQualite        String? @map("code_qualite")
+  organeRef          String? @map("organe_ref")
+  numCirco           String? @map("num_circo")
+  numDepartement     String? @map("num_departement")
+  region             String?
+  departement        String?
+  causeMandat        String? @map("cause_mandat")
+  refCirconscription String? @map("ref_circonscription")
+  causeFin           String? @map("cause_fin")
+  payload            Json
+
+  @@unique([importRunId, uid])
+  @@index([acteurRef])
+  @@map("an_mandat_raw")
+  @@schema("bronze")
+}
+
+model AnOrganeRaw {
+  id              BigInt  @id @default(autoincrement())
+  importRunId     String  @map("import_run_id")
+  uid             String
+  codeType        String  @map("code_type")
+  libelle         String?
+  libelleAbrege   String? @map("libelle_abrege")
+  libelleAbrev    String? @map("libelle_abrev")
+  dateDebut       String? @map("date_debut")
+  dateFin         String? @map("date_fin")
+  legislature     String?
+  numero          String?
+  regionLibelle   String? @map("region_libelle")
+  departementCode String? @map("departement_code")
+  couleurAssociee String? @map("couleur_associee")
+  payload         Json
+
+  @@unique([importRunId, uid])
+  @@index([codeType])
+  @@map("an_organe_raw")
+  @@schema("bronze")
+}
