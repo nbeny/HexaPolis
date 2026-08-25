@@ -1,0 +1,90 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["bronze", "silver", "gold"]
+}
+
+model Source {
+  id        String    @id
+  label     String
+  homepage  String?
+  datasets  Dataset[]
+
+  @@map("source")
+  @@schema("silver")
+}
+
+model Dataset {
+  id         String            @id @default(uuid())
+  sourceId   String            @map("source_id")
+  externalId String            @map("external_id")
+  title      String
+  source     Source            @relation(fields: [sourceId], references: [id])
+  resources  DatasetResource[]
+
+  @@unique([sourceId, externalId])
+  @@map("dataset")
+  @@schema("silver")
+}
+
+model DatasetResource {
+  id         String      @id @default(uuid())
+  datasetId  String      @map("dataset_id")
+  externalId String      @map("external_id")
+  url        String
+  format     String
+  dataset    Dataset     @relation(fields: [datasetId], references: [id])
+  runs       ImportRun[]
+
+  @@unique([datasetId, externalId])
+  @@map("dataset_resource")
+  @@schema("silver")
+}
+
+model ImportRun {
+  id          String             @id @default(uuid())
+  resourceId  String             @map("resource_id")
+  checksum    String
+  startedAt   DateTime           @default(now()) @map("started_at")
+  finishedAt  DateTime?          @map("finished_at")
+  status      ImportRunStatus    @default(RUNNING)
+  staged      Int                @default(0)
+  created     Int                @default(0)
+  updated     Int                @default(0)
+  unchanged   Int                @default(0)
+  rejected    Int                @default(0)
+  pending     Int                @default(0)
+  resource    DatasetResource    @relation(fields: [resourceId], references: [id])
+  rejections  ImportRejection[]
+
+  @@map("import_run")
+  @@schema("silver")
+}
+
+enum ImportRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED_UNCHANGED
+
+  @@schema("silver")
+}
+
+model ImportRejection {
+  id           String    @id @default(uuid())
+  importRunId  String    @map("import_run_id")
+  bronzeTable  String    @map("bronze_table")
+  bronzeRef    String?   @map("bronze_ref")
+  code         String
+  message      String
+  run          ImportRun @relation(fields: [importRunId], references: [id])
+
+  @@index([importRunId])
+  @@map("import_rejection")
+  @@schema("silver")
+}

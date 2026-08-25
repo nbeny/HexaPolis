@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: poligraph-db
+    environment:
+      POSTGRES_USER: poligraph
+      POSTGRES_PASSWORD: poligraph
+      POSTGRES_DB: poligraph
+    ports:
+      - "5433:5432"
+    volumes:
+      - poligraph-pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+volumes:
+  poligraph-pgdata:
