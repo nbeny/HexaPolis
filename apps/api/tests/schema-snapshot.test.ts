@@ -11,6 +11,14 @@ const SCHEMA_PATH = fileURLToPath(new URL('../schema.gql', import.meta.url))
 
 describe('schema.gql', () => {
   it('est à jour vis-à-vis des résolveurs', async () => {
+    // Lu AVANT de démarrer le module, et c'est tout l'enjeu du test :
+    // `autoSchemaFile` fait réécrire `schema.gql` par Nest pendant
+    // `app.init()`. Lire le fichier après le démarrage reviendrait à le
+    // comparer à ce qu'on vient soi-même d'y écrire — le test passerait
+    // toujours, y compris après une modification de résolveur non
+    // regénérée, c'est-à-dire dans le seul cas qu'il existe pour attraper.
+    const committed = await readFile(SCHEMA_PATH, 'utf-8')
+
     const moduleRef = await Test.createTestingModule({ imports: [ServerModule.forRoot()] })
       .overrideProvider(PRISMA_CLIENT)
       .useValue({})
@@ -19,7 +27,6 @@ describe('schema.gql', () => {
     await app.init()
 
     const { schema } = app.get(GraphQLSchemaHost)
-    const committed = await readFile(SCHEMA_PATH, 'utf-8')
 
     // `GraphQLSchemaBuilder` (le code interne de Nest qui écrit
     // `autoSchemaFile` sur disque) préfixe systématiquement le SDL par

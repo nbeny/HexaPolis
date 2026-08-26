@@ -1,0 +1,8 @@
+# `apps/api/schema.gql` est réécrit par NestJS (`autoSchemaFile`) à chaque
+# démarrage du module, donc à chaque exécution des tests de `@poligraph/api`.
+# NestJS écrit des fins de ligne LF ; `core.autocrlf=true` fait extraire le
+# fichier en CRLF sous Windows. Sans cette règle, le fichier apparaît modifié
+# après chaque `pnpm test` alors que son contenu est identique — un bruit
+# permanent dans `git status`, et le genre de faux positif qu'on finit par
+# ignorer, y compris le jour où le schéma a réellement changé.
+apps/api/schema.gql text eol=lf
