@@ -8,10 +8,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
     "cli": "tsx src/main.ts",
-    "serve": "tsx src/main.ts serve"
+    "serve": "pnpm run build && node dist/main.js serve",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",

@@ -436,3 +436,36 @@ parfaitement correct avant que la vraie cause ne soit trouvee : distinguer un
 echec de connexion (qui nomme des internes) d'un echec d'assertion (qui nomme
 une valeur attendue et une valeur recue) evite de reparer ce qui n'est pas
 casse.
+
+---
+
+## Chiffres réels obtenus (Task 5)
+
+Fiche complète interrogée par l'API sur la base de développement, **six sections alimentées** :
+
+```
+Xavier Breton — 1ère circonscription de l'Ain — Droite Républicaine
+mandats      : 5, dont le mandat parlementaire depuis le 2024-07-07
+commissions  : 33
+votes        : 1 412 · participation 16,74 % · statut COMPUTED
+financement  : LR · 36 436 EURO · décision A
+sources      : AN
+scrutins     : 2 769, paginés en connexion Relay
+```
+
+Le taux de participation porte son statut `COMPUTED`, et le montant sa devise — les deux exigences de la spec (§5.7 et §5.4) sont visibles dans la réponse.
+
+**Suite de tests complète, en une commande :**
+
+```
+@poligraph/domain     :  66 tests
+@poligraph/ingestion  : 156 tests
+@poligraph/api        :  31 tests
+                        253 au total, 7 tâches turbo, 3 min 59
+```
+
+### Défaut relevé et corrigé
+
+`tsx` n'émet pas `emitDecoratorMetadata`, ce dont `@nestjs/graphql` a besoin pour construire son schéma par réflexion : lancer le serveur avec `tsx` échoue sur `TypeError: Cannot read properties of undefined`. Les tests ne le voyaient pas — Vitest compile autrement. Le script `serve` passe désormais par le code compilé.
+
+À savoir aussi : le port 3000 peut être occupé par un autre service sur cette machine ; le serveur accepte `PORT` pour en changer.
