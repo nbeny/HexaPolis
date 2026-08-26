@@ -12,12 +12,12 @@ export function testPrisma(): PrismaClient {
  */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE bronze.an_acteur_raw, bronze.an_mandat_raw, bronze.an_organe_raw, bronze.an_scrutin_raw, bronze.an_position_raw, bronze.rne_elu_raw, bronze.cnccfp_compte_raw RESTART IDENTITY CASCADE',
+    'TRUNCATE bronze.an_acteur_raw, bronze.an_mandat_raw, bronze.an_organe_raw, bronze.an_scrutin_raw, bronze.an_position_raw, bronze.rne_elu_raw, bronze.cnccfp_compte_raw, bronze.election_result_raw RESTART IDENTITY CASCADE',
   )
   await prisma.$executeRawUnsafe(
     'TRUNCATE silver.import_rejection, silver.import_run, silver.dataset_resource, silver.dataset, silver.source RESTART IDENTITY CASCADE',
   )
   await prisma.$executeRawUnsafe(
-    'TRUNCATE silver.campaign_account, silver.candidacy, silver.election, silver.political_party, silver.identity_match, silver.ballot_position, silver.parliamentary_ballot, silver.provenance, silver.mandate, silver.body_membership, silver.body, silver.territory, silver.legislature, silver.institution, silver.external_identifier, silver.person_name_variant, silver.person RESTART IDENTITY CASCADE',
+    'TRUNCATE silver.campaign_account, silver.candidacy, silver.election_turnout, silver.election, silver.political_party, silver.identity_match, silver.ballot_position, silver.parliamentary_ballot, silver.provenance, silver.mandate, silver.body_membership, silver.body, silver.territory, silver.legislature, silver.institution, silver.external_identifier, silver.person_name_variant, silver.person RESTART IDENTITY CASCADE',
   )
 }

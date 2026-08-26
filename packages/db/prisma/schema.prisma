@@ -235,15 +235,16 @@ model Legislature {
 }
 
 model Territory {
-  id          String      @id @default(uuid())
+  id          String            @id @default(uuid())
   type        String
   code        String
   label       String
-  parentId    String?     @map("parent_id")
-  parent      Territory?  @relation("TerritoryParent", fields: [parentId], references: [id])
-  children    Territory[] @relation("TerritoryParent")
+  parentId    String?           @map("parent_id")
+  parent      Territory?        @relation("TerritoryParent", fields: [parentId], references: [id])
+  children    Territory[]       @relation("TerritoryParent")
   mandates    Mandate[]
   candidacies Candidacy[]
+  turnouts    ElectionTurnout[]
 
   @@unique([type, code])
   @@map("territory")
@@ -472,8 +473,8 @@ model PoliticalParty {
 }
 
 model Election {
-  id              String      @id @default(uuid())
-  naturalKey      String      @unique @map("natural_key")
+  id              String            @id @default(uuid())
+  naturalKey      String            @unique @map("natural_key")
   type            String
   label           String
   year            Int
@@ -481,30 +482,67 @@ model Election {
   // mandat qui l'a suivie (niveau 2 bis de la cascade). Distincte de `year` :
   // un futur import d'une autre élection porte sa propre date, jamais
   // réutilisée depuis le scrutin de 2022.
-  secondRoundDate DateTime?   @map("second_round_date")
+  secondRoundDate DateTime?         @map("second_round_date")
   candidacies     Candidacy[]
+  turnouts        ElectionTurnout[]
 
   @@map("election")
   @@schema("silver")
 }
 
 model Candidacy {
-  id          String           @id @default(uuid())
-  naturalKey  String           @unique @map("natural_key")
-  electionId  String           @map("election_id")
-  personId    String?          @map("person_id")
-  partyId     String?          @map("party_id")
-  territoryId String?          @map("territory_id")
-  nuance      String?
-  displayName String           @map("display_name")
-  election    Election         @relation(fields: [electionId], references: [id])
-  person      Person?          @relation(fields: [personId], references: [id])
-  party       PoliticalParty?  @relation(fields: [partyId], references: [id])
-  territory   Territory?       @relation(fields: [territoryId], references: [id])
-  account     CampaignAccount?
+  id                String           @id @default(uuid())
+  naturalKey        String           @unique @map("natural_key")
+  electionId        String           @map("election_id")
+  personId          String?          @map("person_id")
+  partyId           String?          @map("party_id")
+  territoryId       String?          @map("territory_id")
+  nuance            String?
+  displayName       String           @map("display_name")
+  // Champs des résultats électoraux (plan 5). Nullable : les candidatures
+  // 2022 importées de la CNCCFP au plan 3 n'ont ni tour ni voix.
+  round             Int?             @map("round")
+  votes             Int?
+  votePctRegistered Decimal?         @map("vote_pct_registered") @db.Decimal(6, 2)
+  votePctExpressed  Decimal?         @map("vote_pct_expressed") @db.Decimal(6, 2)
+  elected           Boolean          @default(false)
+  election          Election         @relation(fields: [electionId], references: [id])
+  person            Person?          @relation(fields: [personId], references: [id])
+  party             PoliticalParty?  @relation(fields: [partyId], references: [id])
+  territory         Territory?       @relation(fields: [territoryId], references: [id])
+  account           CampaignAccount?
 
   @@index([personId])
   @@map("candidacy")
+  @@schema("silver")
+}
+
+// Chiffres de participation par circonscription et par tour. Un `Election`
+// ne porte qu'une ligne pour toute l'élection 2024 (les deux tours partagent
+// la même entité, distingués par `Candidacy.round`) : il ne peut donc pas
+// porter lui-même des inscrits/votants qui varient par circonscription ET
+// par tour (577 circonscriptions × 2 tours = 1154 jeux de chiffres). D'où
+// une table dédiée, sur le même schéma qu'une candidature : une ligne par
+// (élection, circonscription, tour). Les comptes sont recopiés tels que
+// publiés, jamais recalculés — même principe que les voix des candidats.
+model ElectionTurnout {
+  id          String    @id @default(uuid())
+  naturalKey  String    @unique @map("natural_key")
+  electionId  String    @map("election_id")
+  territoryId String    @map("territory_id")
+  round       Int
+  registered  Int
+  voters      Int
+  abstentions Int
+  expressed   Int
+  blank       Int
+  nullVotes   Int       @map("null_votes")
+  election    Election  @relation(fields: [electionId], references: [id])
+  territory   Territory @relation(fields: [territoryId], references: [id])
+
+  @@unique([electionId, territoryId, round])
+  @@index([territoryId])
+  @@map("election_turnout")
   @@schema("silver")
 }
 
@@ -541,4 +579,33 @@ model IdentityMatch {
   @@index([sourceId, confidence])
   @@map("identity_match")
   @@schema("silver")
+}
+
+model ElectionResultRaw {
+  id                  BigInt  @id @default(autoincrement())
+  importRunId         String  @map("import_run_id")
+  ligne               Int
+  rang                Int
+  codeDepartement     String? @map("code_departement")
+  codeCirconscription String? @map("code_circonscription")
+  libelleCirco        String? @map("libelle_circonscription")
+  inscrits            String?
+  votants             String?
+  exprimes            String?
+  blancs              String?
+  nuls                String?
+  nuance              String?
+  nom                 String?
+  prenom              String?
+  sexe                String?
+  voix                String?
+  pctInscrits         String? @map("pct_inscrits")
+  pctExprimes         String? @map("pct_exprimes")
+  elu                 String?
+  payload             Json
+
+  @@unique([importRunId, ligne, rang])
+  @@index([codeCirconscription])
+  @@map("election_result_raw")
+  @@schema("bronze")
 }
