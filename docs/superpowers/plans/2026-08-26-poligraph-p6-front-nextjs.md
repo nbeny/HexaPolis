@@ -1477,7 +1477,12 @@ même agrégation, sans parcours supplémentaire.
    cette personne dans les jeux de données importés. » — sans lien vers la
    publication officielle, contrairement au bloc `Absent` du financement. Le
    critère « son motif *et* un lien vers la source officielle » n'est rempli que
-   pour le financement.
+   pour le financement. *Corrigé le 26 août 2026 : la section utilise désormais
+   le composant `Absent`, avec un lien vers `RESULTATS_T1_URL`
+   (`packages/ingestion/src/adapters/resultats/resultats.adapter.ts`) — le
+   fichier réellement importé, 1er tour, qui couvre toutes les circonscriptions
+   contrairement au 2nd. Concerne 48 fiches sur 577 (écart 6), vérifié en réel
+   sur `pa793944-alexandra-martin-gironde`.*
 3. **Contradiction du taux à zéro** (voir ci-dessus, `pa793528`). *Corrigé le
    26 août 2026 par la migration
    `20260826150500_gold_participation_numerateur_absent`, mais pas dans le sens
@@ -1497,10 +1502,23 @@ même agrégation, sans parcours supplémentaire.
    député ne correspond à ces filtres. Seuls les députés de la 17e législature
    figurent en base… » : le motif invoque la législature alors que la vraie
    cause est un curseur au-delà de la fin de la liste. URL forgée à la main
-   seulement — aucun lien du site n'y mène.
+   seulement — aucun lien du site n'y mène. *Corrigé le 26 août 2026 :
+   `isPastLastPage` (`apps/web/src/lib/deputies-params.ts`, testé) distingue
+   désormais un filtre sans résultat (`totalCount === 0`) d'un curseur périmé
+   sur une liste non vide. Vérifié en réel sur l'URL ci-dessus : la page
+   affiche maintenant « Cette page se situe au-delà de la fin des résultats :
+   le curseur de pagination pointe après le dernier député correspondant aux
+   filtres actifs, qui eux en comptent bien 12. Revenir à la première page. »,
+   le lien pointant vers `/deputes?departmentCode=33`, filtres conservés.*
 5. **Recherche non insensible aux accents.** `search` fait un `ILIKE '%…%'` brut :
    `?q=Corbière` trouve, `?q=Corbiere` ne trouve rien. Sur un site français,
-   c'est une absence qui se lit comme une donnée manquante.
+   c'est une absence qui se lit comme une donnée manquante. *Corrigé le 26 août
+   2026 par la migration `20260826210000_unaccent_extension` (extension
+   Postgres `unaccent`, installée en dev et en test) : `GoldRepository.searchCards`
+   compare désormais `unaccent(colonne) ILIKE unaccent(motif)` des deux côtés.
+   Pas d'index d'expression — `unaccent()` n'est pas `IMMUTABLE`, et à 577
+   fiches un scan séquentiel est déjà de l'ordre de la milliseconde. Vérifié en
+   réel : `?q=Corbiere` comme `?q=Corbière` trouvent tous deux Alexis Corbière.*
 6. **48 députés sans résultat électoral 2024** (8,5 %) — aucune candidature
    rattachée du tout, donc « Aucune candidature… » sur leur fiche.
 7. **Arbitrages limités au second tour.** Les 6 identités arbitrées à la main
@@ -1620,11 +1638,13 @@ même agrégation, sans parcours supplémentaire.
 État constaté à la vérification du 26 août 2026 (détail au relevé de la tâche 8) :
 
 - ✅ Les trois routes fonctionnent sur les données réelles.
-- ⚠️ Une section sans donnée affiche son motif et un lien vers la source
+- ✅ Une section sans donnée affiche son motif et un lien vers la source
   officielle — jamais un vide, jamais un zéro. *Atteint pour le financement
-  (bloc `Absent` + lien CNCCFP) ; « Élections et résultats » affiche son motif
-  mais sans lien officiel. Et une fiche sur 567 affiche `0,00 %` en se
-  contredisant (écart 3).*
+  (bloc `Absent` + lien CNCCFP) et, depuis le 26 août 2026, pour « Élections et
+  résultats » (bloc `Absent` + lien vers `RESULTATS_T1_URL`, Ministère de
+  l'Intérieur — écart 2). Le cas restant d'une fiche sur 567 affichant
+  `0,00 %` en se contredisant (écart 3) est une question de cohérence
+  numérique distincte, pas de section vide sans lien.*
 - ✅ Les chiffres de participation portent visiblement la mention « calculé par
   PoliGraph » (badge textuel, avec `title` explicatif). *Depuis le 26 août 2026,
   ce n'est plus un « taux de participation » unique mais une décomposition de
