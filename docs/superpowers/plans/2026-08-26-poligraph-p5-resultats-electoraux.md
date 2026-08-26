@@ -57,6 +57,22 @@ Le nombre de blocs se déduit des colonnes : `(nbColonnes - 18) / 9`. Ne pas cod
 
 `Code circonscription législative` vaut `0101` — **le même format que le RNE**. La fonction de normalisation écrite au plan 3 (`0101` → `01-1`) s'applique telle quelle. Ne pas en écrire une seconde.
 
+### Piège mesuré : les deux tours ne codent pas les départements pareil
+
+Le fichier du **premier tour** omet le zéro initial des départements 1 à 9, celui du **second** le conserve :
+
+| Source | Département | Circonscription |
+|---|---|---|
+| 1er tour |  |  |
+| 2nd tour |  |  |
+| Base () | — |  |
+
+La normalisation écrite au plan 3 découpe les deux derniers caractères. Appliquée à , elle produit  au lieu de  : la circonscription n'est jamais retrouvée.
+
+**34 circonscriptions sur 577** sont concernées au premier tour, aucune au second. Le correctif est de compléter le code de département à deux chiffres avant de composer la clé — mais sans lui, 34 circonscriptions et leurs élus se rattachent à un territoire inexistant, **sans lever la moindre erreur**.
+
+Un test doit couvrir explicitement le code court :  doit donner , comme .
+
 ### Rapprochement : 571 élus sur 577
 
 Mesuré contre les 3 119 personnes en base, avec les fonctions de `packages/domain` :
