@@ -142,11 +142,19 @@ interface ExploitableRow {
  * l'appel à `assertDecisionsAreResolvable` ci-dessous). Une décision qui ne
  * vise pas DATA_GOUV (ex. un SPLIT entre deux autres sources) est laissée
  * passer telle quelle : ce filtre ne concerne que cette source.
+ *
+ * Le filtre n'écarte QUE les clés portant explicitement le préfixe de l'autre
+ * tour. Une clé sans préfixe de tour reconnaissable — la faute de frappe la
+ * plus probable, puisqu'un humain recopie ces clés à la main — est conservée,
+ * donc soumise à `assertDecisionsAreResolvable`, donc signalée bruyamment.
+ * Un filtre qui l'écarterait des DEUX tours la rendrait silencieusement
+ * inopérante, exactement ce que le fichier d'arbitrage existe pour empêcher.
  */
 function decisionAppliesToRound(decision: IdentityDecision, round: Round): boolean {
+  const otherRound: Round = round === 1 ? 2 : 1
   for (const ref of [decision.left, decision.right]) {
     if (ref.source !== RESULTATS_SOURCE) continue
-    if (!ref.key.startsWith(`${round}|`)) return false
+    if (ref.key.startsWith(`${otherRound}|`)) return false
   }
   return true
 }

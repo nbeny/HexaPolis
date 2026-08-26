@@ -394,6 +394,37 @@ describe('normalizeResultats — résolution d’identité', () => {
     }
   })
 
+  it("une décision dont la clé ne porte aucun préfixe de tour échoue bruyamment, elle n'est pas écartée des deux tours", async () => {
+    // Le filtre par tour n'écarte que les clés portant explicitement le
+    // préfixe de l'AUTRE tour. Une clé sans préfixe — la faute de frappe la
+    // plus probable, puisqu'un humain recopie ces clés à la main — doit
+    // rester soumise à assertDecisionsAreResolvable : un filtre qui
+    // l'écarterait des deux tours la rendrait silencieusement inopérante,
+    // ce que le fichier d'arbitrage existe précisément pour empêcher.
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-resultats-decision-sans-tour-'))
+    const decisionsPath = join(dir, 'decisions.yaml')
+    try {
+      await writeFile(
+        decisionsPath,
+        `decisions:
+  - decision: MERGE
+    left:  { source: DATA_GOUV, key: "01-1|3|xavier|breton" }
+    right: { source: AN, key: "PA900001" }
+    reason: "test : préfixe de tour oublié à la saisie"
+    decidedOn: 2026-08-26
+`,
+        'utf-8',
+      )
+
+      const runT1 = await stageT1('t1-decision-sans-prefixe')
+      await expect(normalizeResultats(prisma, runT1, decisionsPath)).rejects.toThrow(
+        /01-1\|3\|xavier\|breton/,
+      )
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it("l'unicité par circonscription se calcule sur l'ensemble du fichier : un homonyme placé loin derrière défait le premier candidat", async () => {
     const institution = await prisma.institution.upsert({
       where: { code: 'TEST_INSTITUTION' },
