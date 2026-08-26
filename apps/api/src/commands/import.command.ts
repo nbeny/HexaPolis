@@ -6,6 +6,7 @@ import {
   AnScrutinsAdapter,
   RneAdapter,
   CnccfpAdapter,
+  ResultatsAdapter,
   SourceFileClient,
   LEGISLATURES_DISPONIBLES,
   openImportRun,
@@ -24,7 +25,7 @@ interface ImportCommandOptions {
   legislature?: number[]
 }
 
-const TARGETS = ['an:acteurs', 'an:scrutins', 'rne:deputes', 'cnccfp:comptes'] as const
+const TARGETS = ['an:acteurs', 'an:scrutins', 'rne:deputes', 'cnccfp:comptes', 'resultats:legislatives'] as const
 
 interface Report {
   staged: number
@@ -121,6 +122,9 @@ export class ImportCommand extends CommandRunner {
     }
     if (target === 'cnccfp:comptes') {
       return new CnccfpAdapter(prisma, new SourceFileClient('.data/cnccfp'))
+    }
+    if (target === 'resultats:legislatives') {
+      return new ResultatsAdapter(prisma, new SourceFileClient('.data/resultats'))
     }
 
     const client = new SourceFileClient('.data/an')

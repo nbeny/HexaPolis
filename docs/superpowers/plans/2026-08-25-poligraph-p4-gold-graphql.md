@@ -469,3 +469,56 @@ Le taux de participation porte son statut `COMPUTED`, et le montant sa devise �
 `tsx` n'émet pas `emitDecoratorMetadata`, ce dont `@nestjs/graphql` a besoin pour construire son schéma par réflexion : lancer le serveur avec `tsx` échoue sur `TypeError: Cannot read properties of undefined`. Les tests ne le voyaient pas — Vitest compile autrement. Le script `serve` passe désormais par le code compilé.
 
 À savoir aussi : le port 3000 peut être occupé par un autre service sur cette machine ; le serveur accepte `PORT` pour en changer.
+
+### Apres un redemarrage du conteneur
+
+Attendre `pg_isready`, pas un delai fixe. Sur une base de 3 Go, PostgreSQL met
+plusieurs secondes a accepter les connexions, et un test lance trop tot echoue
+sur `FATAL: the database system is starting up` — message qui ressemble a une
+panne de connexion sans en etre une.
+
+```bash
+for i in 1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40; do
+  docker exec poligraph-db pg_isready -U poligraph -q && break
+  sleep 3
+done
+```
