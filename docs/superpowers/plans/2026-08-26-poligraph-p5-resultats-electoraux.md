@@ -63,15 +63,15 @@ Le fichier du **premier tour** omet le zéro initial des départements 1 à 9, c
 
 | Source | Département | Circonscription |
 |---|---|---|
-| 1er tour |  |  |
-| 2nd tour |  |  |
-| Base () | — |  |
+| 1er tour | `1` | `101` |
+| 2nd tour | `01` | `0101` |
+| Base (`silver.territory`) | — | `01-1` |
 
-La normalisation écrite au plan 3 découpe les deux derniers caractères. Appliquée à , elle produit  au lieu de  : la circonscription n'est jamais retrouvée.
+La normalisation écrite au plan 3 découpe les deux derniers caractères. Appliquée à `101`, elle produit `1-1` au lieu de `01-1` : la circonscription n'est jamais retrouvée.
 
 **34 circonscriptions sur 577** sont concernées au premier tour, aucune au second. Le correctif est de compléter le code de département à deux chiffres avant de composer la clé — mais sans lui, 34 circonscriptions et leurs élus se rattachent à un territoire inexistant, **sans lever la moindre erreur**.
 
-Un test doit couvrir explicitement le code court :  doit donner , comme .
+Un test doit couvrir explicitement le code court : `101` doit donner `01-1`, comme `0101`.
 
 ### Rapprochement : 571 élus sur 577
 
