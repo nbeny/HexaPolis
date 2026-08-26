@@ -85,3 +85,16 @@ export function hasActiveFilters(params: DeputyListParams): boolean {
     params.legislature !== null || params.groupId !== null || params.departmentCode !== null
   )
 }
+
+/**
+ * Une page de liste vide a deux causes que le texte affiché ne doit jamais
+ * confondre : soit aucun député ne correspond aux filtres (`totalCount ===
+ * 0`), soit un curseur `after` forgé ou périmé pointe au-delà de la fin
+ * d'une liste qui, elle, a des résultats. La seconde ne dit rien des
+ * filtres — écart 4 du plan p6, tâche 8 : `/deputes?departmentCode=33&after=…`
+ * affichait « 12 députés correspondent aux filtres actifs » suivi d'un
+ * message qui prétendait le contraire.
+ */
+export function isPastLastPage(params: DeputyListParams, rowCount: number, totalCount: number): boolean {
+  return rowCount === 0 && params.after !== null && totalCount > 0
+}

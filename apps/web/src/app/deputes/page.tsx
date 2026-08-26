@@ -6,6 +6,7 @@ import {
   PAGE_SIZE,
   buildListHref,
   hasActiveFilters,
+  isPastLastPage,
   readListParams,
   type DeputyListParams,
   type RawSearchParams,
@@ -213,6 +214,7 @@ export default async function DeputiesPage({
       ? buildListHref(params, { after: connection.pageInfo.endCursor })
       : null
   const firstPageHref = params.after === null ? null : buildListHref(params, { after: null })
+  const pastLastPage = isPastLastPage(params, rows.length, connection.totalCount)
 
   return (
     <section>
@@ -225,7 +227,19 @@ export default async function DeputiesPage({
 
       <FilterForm params={params} options={options} />
 
-      {rows.length === 0 ? (
+      {pastLastPage ? (
+        <p className="rounded border border-dashed border-stone-300 bg-stone-100/60 p-4 text-sm text-stone-700">
+          Cette page se situe au-delà de la fin des résultats : le curseur de pagination pointe
+          après le dernier député correspondant aux filtres actifs, qui eux en comptent bien{' '}
+          {formatInteger(connection.totalCount) ?? connection.totalCount}.{' '}
+          {firstPageHref && (
+            <Link href={firstPageHref} className="underline underline-offset-2">
+              Revenir à la première page
+            </Link>
+          )}
+          .
+        </p>
+      ) : rows.length === 0 ? (
         <p className="rounded border border-dashed border-stone-300 bg-stone-100/60 p-4 text-sm text-stone-700">
           Aucun député ne correspond à ces filtres. Seuls les députés de la{' '}
           {CURRENT_LEGISLATURE}e législature figurent en base : un filtre portant sur une autre

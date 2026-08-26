@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildListHref,
   hasActiveFilters,
+  isPastLastPage,
   readListParams,
 } from '@/lib/deputies-params'
 
@@ -85,6 +86,31 @@ describe('buildListHref', () => {
       after: null,
     })
     expect(href).toBe('/deputes?groupId=a%26b%3Dc')
+  })
+})
+
+describe('isPastLastPage', () => {
+  const withCursor = { legislature: null, groupId: null, departmentCode: '33', after: 'b2Zmc2V0OjI1' }
+
+  // Cas réel de l'écart 4 : `?departmentCode=33&after=b2Zmc2V0OjI1` sur 12
+  // résultats — la page est vide, mais les filtres, eux, correspondent
+  // toujours à quelque chose.
+  it('vrai quand le curseur dépasse la fin d’une liste non vide', () => {
+    expect(isPastLastPage(withCursor, 0, 12)).toBe(true)
+  })
+
+  it('faux quand la page contient des résultats', () => {
+    expect(isPastLastPage(withCursor, 5, 12)).toBe(false)
+  })
+
+  it('faux quand aucun curseur n’est actif — première page vide, cause différente', () => {
+    expect(isPastLastPage({ ...withCursor, after: null }, 0, 0)).toBe(false)
+  })
+
+  it('faux quand les filtres eux-mêmes ne correspondent à rien (totalCount à 0)', () => {
+    // Même avec un curseur, si `totalCount` est déjà à 0 le motif est le
+    // filtre, pas la pagination : le message « aucun résultat » reste vrai.
+    expect(isPastLastPage(withCursor, 0, 0)).toBe(false)
   })
 })
 
