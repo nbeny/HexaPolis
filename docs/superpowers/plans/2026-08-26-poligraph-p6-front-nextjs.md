@@ -1451,6 +1451,11 @@ identiques à `silver.candidacy`.
    tours, 72 n'ont que le tour 1 parce qu'ils ont été élus au premier).
    Exemple : `DATA_GOUV|1|04-2|2|sophie|vaginay` (18 314 voix) existe et reste
    non rattaché. La fiche ne signale pas que son historique est incomplet.
+   *Corrigé le 26 août 2026 : six décisions de premier tour ajoutées à
+   `data/identity-decisions.yaml`, clés relevées dans `silver.identity_match`
+   et non déduites. Après renormalisation des deux tours : 0 député avec un
+   tour 2 sans tour 1 (447 ont les deux, 72 le seul tour 1), `silver.person`
+   toujours à 3 119, 577 candidatures `elected = true`.*
 8. **L'arbitrage humain est invisible.** Un résultat rattaché par décision
    humaine s'affiche exactement comme un rattachement automatique. C'est un
    troisième statut de confiance, à côté de « publié » et « calculé ».

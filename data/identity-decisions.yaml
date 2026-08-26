@@ -15,6 +15,22 @@
 # législature, vérifié avant d'écrire la décision (voir la requête dans le
 # plan 5, tâche 4) — c'est cette vérification, et non le nom seul, qui motive
 # le rapprochement.
+#
+# Second usage (26 août 2026) : les candidatures de PREMIER tour des six mêmes
+# élus. Les six décisions initiales ne portaient que le second tour, si bien
+# que ces six-là étaient les seuls députés de toute la base à n'avoir qu'un
+# résultat de second tour — 441 en ont deux, 72 n'ont que le premier parce
+# qu'ils ont été élus dès ce tour-là. Leur fiche présentait donc un historique
+# électoral tronqué sans dire qu'il l'était, ce qui est une forme de fausse
+# affirmation. Les six `sourceKey` de premier tour ont été relevées dans
+# `silver.identity_match` (source DATA_GOUV, préfixe `1|`) et non déduites de
+# celles du second tour : le numéro de panneau qu'elles portent est propre à
+# chaque tour, et une clé devinée serait rejetée par
+# `assertDecisionsAreResolvable` — ou, pire, rattacherait une autre
+# candidature. Chaque circonscription concernée a été revérifiée : elle n'a
+# toujours qu'un seul titulaire de mandat parlementaire sous la 17e
+# législature (68 circonscriptions sur 577 en ont eu plusieurs ; aucune de ces
+# six n'en fait partie).
 decisions:
   - decision: MERGE
     left:
@@ -101,4 +117,115 @@ decisions:
       seule titulaire d'un mandat parlementaire de la 3e circonscription de
       Polynésie française (987-3) sous la 17e législature, depuis le
       2024-07-07.
+    decidedOn: "2026-08-26"
+
+  # --- Premier tour des six mêmes élus (26 août 2026) ---
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|04-2|2|sophie|vaginay"
+    right:
+      source: "AN"
+      key: "PA840657"
+    reason: >-
+      Candidature de premier tour de la même élue, laissée non rattachée par
+      la décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 2e circonscription des
+      Alpes-de-Haute-Provence (04-2), panneau 2 — 18 314 voix, 40,89 % des
+      suffrages exprimés, non élue au premier tour puis élue au second avec
+      21 655 voix. La circonscription n'a qu'un seul titulaire d'un mandat
+      parlementaire sous la 17e législature, Sophie Ricourt Vaginay
+      (PA840657), depuis le 2024-07-07 ; c'est cette unicité, revérifiée, qui
+      fonde le rapprochement, et non la seule forme du nom publié.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|13-16|5|emmanuel|tache de la pagerie"
+    right:
+      source: "AN"
+      key: "PA793382"
+    reason: >-
+      Candidature de premier tour du même élu, laissée non rattachée par la
+      décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 16e circonscription des
+      Bouches-du-Rhône (13-16), panneau 5 — 28 179 voix, 47,12 % des
+      suffrages exprimés, non élu au premier tour puis élu au second avec
+      32 359 voix. La circonscription n'a qu'un seul titulaire d'un mandat
+      parlementaire sous la 17e législature, Emmanuel Taché (PA793382),
+      depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|53-3|3|yannick|favennec"
+    right:
+      source: "AN"
+      key: "PA267042"
+    reason: >-
+      Candidature de premier tour du même élu, laissée non rattachée par la
+      décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 3e circonscription de la
+      Mayenne (53-3), panneau 3 — 23 294 voix, 48,68 % des suffrages
+      exprimés, non élu au premier tour puis élu au second avec 31 379 voix.
+      La circonscription n'a qu'un seul titulaire d'un mandat parlementaire
+      sous la 17e législature, Yannick Favennec-Bécot (PA267042), depuis le
+      2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|78-8|7|benjamin|lucas"
+    right:
+      source: "AN"
+      key: "PA795636"
+    reason: >-
+      Candidature de premier tour du même élu, laissée non rattachée par la
+      décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 8e circonscription des
+      Yvelines (78-8), panneau 7 — 20 416 voix, 44,92 % des suffrages
+      exprimés, non élu au premier tour puis élu au second avec 27 801 voix.
+      La circonscription n'a qu'un seul titulaire d'un mandat parlementaire
+      sous la 17e législature, Benjamin Lucas-Lundy (PA795636), depuis le
+      2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|974-4|2|emeline|kbidi"
+    right:
+      source: "AN"
+      key: "PA795998"
+    reason: >-
+      Candidature de premier tour de la même élue, laissée non rattachée par
+      la décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 4e circonscription de La
+      Réunion (974-4), panneau 2 — 22 696 voix, 42,28 % des suffrages
+      exprimés, non élue au premier tour puis élue au second avec 32 405
+      voix. La circonscription n'a qu'un seul titulaire d'un mandat
+      parlementaire sous la 17e législature, Émeline K/Bidi (PA795998),
+      depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "1|987-3|3|mereana|reid aberlot"
+    right:
+      source: "AN"
+      key: "PA795240"
+    reason: >-
+      Candidature de premier tour de la même élue, laissée non rattachée par
+      la décision de second tour qui ne portait que la clé `2|…`. Clé relevée
+      dans `silver.identity_match` : premier tour, 3e circonscription de
+      Polynésie française (987-3), panneau 3 — 12 483 voix, 42,71 % des
+      suffrages exprimés, non élue au premier tour puis élue au second avec
+      17 308 voix. La circonscription n'a qu'un seul titulaire d'un mandat
+      parlementaire sous la 17e législature, Mereana Reid Arbelot (PA795240),
+      depuis le 2024-07-07.
     decidedOn: "2026-08-26"
