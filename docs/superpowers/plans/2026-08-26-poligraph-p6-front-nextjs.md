@@ -1313,19 +1313,163 @@ Vérifiez trois cas réels : une recherche qui trouve plusieurs homonymes (« Be
 
 ## Task 8 : Vérification de bout en bout
 
-- [ ] `pnpm typecheck` et `pnpm build` à la racine, tous paquets confondus.
-- [ ] `pnpm test` intégralement — les suites existantes (domain, ingestion, api) doivent rester au vert. Rappel : la base de test est partagée, `fileParallelism` est désactivé, et il faut attendre `pg_isready` après tout redémarrage du conteneur.
-- [ ] Comparer trois fiches réelles à la base : un député avec compte de campagne 2022, un sans, et un dont la participation est `null`. Les trois doivent afficher un état juste, et le troisième ne doit afficher aucun `0 %`.
-- [ ] Vérifier qu'aucune page ne rend `undefined`, `null` ou `NaN` à l'écran. Une recherche du texte brut dans le HTML rendu suffit.
-- [ ] Consigner dans ce plan les chiffres réels observés et committer.
+- [x] `pnpm typecheck` et `pnpm build` à la racine, tous paquets confondus.
+- [x] `pnpm test` intégralement — les suites existantes (domain, ingestion, api) doivent rester au vert. Rappel : la base de test est partagée, `fileParallelism` est désactivé, et il faut attendre `pg_isready` après tout redémarrage du conteneur.
+- [x] Comparer trois fiches réelles à la base : un député avec compte de campagne 2022, un sans, et un dont la participation est `null`. Les trois doivent afficher un état juste, et le troisième ne doit afficher aucun `0 %`.
+- [x] Vérifier qu'aucune page ne rend `undefined`, `null` ou `NaN` à l'écran. Une recherche du texte brut dans le HTML rendu suffit.
+- [x] Consigner dans ce plan les chiffres réels observés et committer.
+
+### Relevé du 26 août 2026
+
+Import en base au moment de la vérification : 3 119 personnes, **567** fiches
+`gold.deputy_card` (et non 577 : la vue exige un mandat de 17e législature encore
+ouvert), 18 311 scrutins, 2024 rattaché, 6 arbitrages humains.
+
+**Typecheck / build.** `pnpm typecheck` : 8 tâches, 8 succès. `pnpm build --force` :
+5 tâches, 5 succès, 0 en cache, 16,6 s. Next rend 4 routes — `/`, `/_not-found`,
+`/deputes`, `/deputes/[slug]` — dont trois en rendu serveur à la demande.
+
+**Tests** (`pnpm test --force`, 2 min 32 s, 8 tâches vertes) :
+
+| Paquet | Fichiers | Tests | Durée |
+| --- | --- | --- | --- |
+| `@poligraph/domain` | 6 | 66 | 0,7 s |
+| `@poligraph/ingestion` | 24 | **199** | 124,7 s |
+| `@poligraph/api` | 8 | 38 | 14,3 s |
+| `@poligraph/web` | 9 | 38 | 2,3 s |
+| **Total** | **47** | **341** | |
+
+Après le run, `git status` est vide : la règle `apps/api/schema.gql text eol=lf`
+du `.gitattributes` fait son office, le schéma réécrit par `autoSchemaFile`
+n'apparaît pas modifié.
+
+**Trois fiches comparées à la base** (API sur `127.0.0.1:4000`, front sur
+`127.0.0.1:3100`) :
+
+| Fiche | Champ | Base | Écran |
+| --- | --- | --- | --- |
+| `pa721210-alexis-corbiere` (avec compte 2022) | `participation_rate` | `0.1909` | `19,09 %` + « Calculé par PoliGraph » |
+| | `vote_count` / `participation_ballot_count` | 1 610 / 8 434 | « 1 610 sur 8 434 » |
+| | candidature 2024 T2 | 25 033 voix, 57,16 %, `elected=t` | « 25 033 voix — 57,16 % des suffrages exprimés / Élu(e) » |
+| | compte 2022 (`EURO`) | dép. 31 337,00 · rec. 31 337,00 · dons 0,00 · apport 30 258,00 · retenu 31 313,00 / 31 313,00 · décision `AR` | mêmes montants en euros, `0,00 €` affiché comme déclaration |
+| `pa793944-alexandra-martin-gironde` (sans compte) | `participation_rate` | `0.0123` | `1,23 %` |
+| | candidatures | 0 ligne | « Aucune candidature n'est rattachée à cette personne… » |
+| | compte de campagne | aucun | bloc `Absent` + lien CNCCFP |
+| `pa793528-chantal-bouloux` (cas limite substitué) | `vote_count` (17e) | 0 | `0` |
+| | `participation_vote_count` | `NULL` | motif d'absence affiché |
+| | `participation_ballot_count` | 8 434 | non affiché |
+| | `participation_rate` | `0.0000` | **`0,00 %`** |
+
+**Substitution du troisième cas.** Aucun député n'a de `participation_rate` à
+`NULL` : `SELECT count(*) FILTER (WHERE participation_rate IS NULL) FROM
+gold.deputy_card` rend **0** sur 567. Le cas limite retenu à la place est le seul
+député dont le taux vaut exactement zéro, Chantal Bouloux (`22-2`) : `vote_count`
+à 0 en 17e législature alors que ses 1 349 positions sont toutes de la 16e —
+c'est fidèle à la source, `bronze.an_position_raw` ne porte que 1 349 lignes pour
+`PA793528`.
+
+**Défaut constaté sur ce cas.** La fiche se contredit :
+« Scrutins retenus pour le calcul (17e législature) » affiche *« Aucun scrutin
+publié en décompte nominatif ne recoupe un mandat tenu par ce député : le
+dénominateur n'existe pas »*, alors que « Taux de participation » affiche juste
+en dessous `0,00 %` — un taux que seul ce dénominateur permet de calculer, et
+qu'il vaut 8 434 en base. Cause : `gold.deputy_card` laisse
+`participation_vote_count` à `NULL` (jointure `LEFT JOIN eligible_votes` sans
+correspondance) mais applique `COALESCE(…, 0)` au numérateur de
+`participation_rate`. `voting-section.tsx` masque alors la ligne du milieu et
+garde celle du bas. Correctif attendu, hors périmètre du plan 6 :
+`COALESCE(ev.voted_ballot_count, 0)` pour `participation_vote_count` dans la vue
+matérialisée, ce qui donnerait « 0 sur 8 434 » et un `0,00 %` cohérent.
+
+**Routes vérifiées** (HTML rendu, balises retirées, recherche de `undefined`,
+`null`, `NaN`, `[object Object]`, `Invalid Date`) — 27 routes, **aucune
+occurrence** :
+
+`/` · `/?q=Besson` · `/?q=Martin` · `/?q=Corbière` · `/?q=Corbiere` ·
+`/?q=zzzzzzzz` · `/?q=Jean Moulin` · `/deputes` · `/deputes?departmentCode=33` ·
+`/deputes?departmentCode=099` · `/deputes?departmentCode=977` ·
+`/deputes?groupId=0cc654e8-…` · `/deputes?legislature=17` ·
+`/deputes?after=b2Zmc2V0OjI1` · `/deputes?departmentCode=33&after=b2Zmc2V0OjI1` ·
+`/deputes?legislature=16` · `/deputes?legislature=abc` · et neuf fiches
+(`pa721210`, `pa793944`, `pa793528`, `pa721004`, `pa795258`, `pa840657`,
+`pa795240`, `pa267042`, `pa842311`) plus `/deputes/inexistant-xyz` (404).
+
+Dénombrements confirmés en base : 567 au total, 12 en Gironde (`33`), 10 pour les
+Français établis hors de France (`099`), 1 pour Saint-Barthélemy/Saint-Martin
+(`977`), 122 pour le groupe RN.
+
+**Territoires atypiques.** `pa721004-amelia-lakrafi` rend « 10ème circonscription
+des Français établis hors de France », code `099-10`, département `099` ;
+`pa795258-frantz-gumbs` rend « 1ère circonscription de Saint-Barthélémy et
+Saint-Martin », code `977-1`, département `977`. L'alias de code départemental
+posé au plan 5 tient : les deux fiches, les deux filtres de liste et les
+candidatures 2024 pointent le bon territoire.
+
+**Arbitrages humains.** Les six identités décidées à la main (`decided_by =
+'HUMAN'`, toutes de source `DATA_GOUV`) portent bien leur résultat 2024 à
+l'écran : Sophie Ricourt Vaginay 21 655 voix / 50,97 % / Élu(e),
+Mereana Reid Arbelot 17 308 / 50,87 %, Yannick Favennec-Bécot 31 379 / 68,90 % —
+identiques à `silver.candidacy`.
+
+### Écarts connus, à traiter hors plan 6
+
+1. **Provenance partielle.** Seule la source `AN` porte une provenance au niveau
+   `Person` (3 119 lignes ; aucune pour `RNE`, `CNCCFP`, `DATA_GOUV`). Quatre
+   sections sur six affichent « Assemblée nationale, importé le 25 août 2026 » ;
+   « Élections et résultats » et « Financement de campagne » nomment leur
+   éditeur en prose mais n'affichent **ni source ni date d'import**. Le critère
+   « chaque section affiche sa source et sa date d'import » est donc atteint aux
+   deux tiers.
+2. **Section vide sans lien officiel.** « Élections et résultats » sans
+   candidature rend un simple paragraphe — « Aucune candidature n'est rattachée à
+   cette personne dans les jeux de données importés. » — sans lien vers la
+   publication officielle, contrairement au bloc `Absent` du financement. Le
+   critère « son motif *et* un lien vers la source officielle » n'est rempli que
+   pour le financement.
+3. **Contradiction du taux à zéro** (voir ci-dessus, `pa793528`).
+4. **Message d'absence trompeur en pagination.** `/deputes?departmentCode=33&after=b2Zmc2V0OjI1`
+   annonce « 12 députés correspondent aux filtres actifs » puis affiche « Aucun
+   député ne correspond à ces filtres. Seuls les députés de la 17e législature
+   figurent en base… » : le motif invoque la législature alors que la vraie
+   cause est un curseur au-delà de la fin de la liste. URL forgée à la main
+   seulement — aucun lien du site n'y mène.
+5. **Recherche non insensible aux accents.** `search` fait un `ILIKE '%…%'` brut :
+   `?q=Corbière` trouve, `?q=Corbiere` ne trouve rien. Sur un site français,
+   c'est une absence qui se lit comme une donnée manquante.
+6. **48 députés sans résultat électoral 2024** (8,5 %) — aucune candidature
+   rattachée du tout, donc « Aucune candidature… » sur leur fiche.
+7. **Arbitrages limités au second tour.** Les 6 identités arbitrées à la main
+   sont les 6 seules à n'avoir que le tour 2 en base (441 députés ont les deux
+   tours, 72 n'ont que le tour 1 parce qu'ils ont été élus au premier).
+   Exemple : `DATA_GOUV|1|04-2|2|sophie|vaginay` (18 314 voix) existe et reste
+   non rattaché. La fiche ne signale pas que son historique est incomplet.
+8. **L'arbitrage humain est invisible.** Un résultat rattaché par décision
+   humaine s'affiche exactement comme un rattachement automatique. C'est un
+   troisième statut de confiance, à côté de « publié » et « calculé ».
+9. **Note sur la tâche 7.** L'exemple d'homonymie « Besson » est faux :
+   `silver.person` contient bien deux « Jean Besson », mais aucun n'est député
+   de la 17e législature, donc `/?q=Besson` rend l'état « aucun résultat ».
+   L'homonymie réellement observable par la recherche est « Alexandra Martin »
+   (Alpes-Maritimes et Gironde), correctement distinguée par le slug.
 
 ---
 
 ## Critère d'achèvement
 
-- Les trois routes fonctionnent sur les données réelles.
-- Une section sans donnée affiche son motif et un lien vers la source officielle — jamais un vide, jamais un zéro.
-- Le taux de participation porte visiblement la mention « calculé par PoliGraph ».
-- Chaque section affiche sa source et sa date d'import.
-- Les types du front sont générés depuis `apps/api/schema.gql`, et le test d'instantané de schéma empêche les deux de diverger.
-- `pnpm test`, `pnpm typecheck` et `pnpm build` passent à la racine.
+État constaté à la vérification du 26 août 2026 (détail au relevé de la tâche 8) :
+
+- ✅ Les trois routes fonctionnent sur les données réelles.
+- ⚠️ Une section sans donnée affiche son motif et un lien vers la source
+  officielle — jamais un vide, jamais un zéro. *Atteint pour le financement
+  (bloc `Absent` + lien CNCCFP) ; « Élections et résultats » affiche son motif
+  mais sans lien officiel. Et une fiche sur 567 affiche `0,00 %` en se
+  contredisant (écart 3).*
+- ✅ Le taux de participation porte visiblement la mention « calculé par
+  PoliGraph » (badge textuel, avec `title` explicatif).
+- ⚠️ Chaque section affiche sa source et sa date d'import. *Quatre sections sur
+  six ; les élections et le financement n'ont pas de provenance au niveau
+  `Person` en base (écart 1).*
+- ✅ Les types du front sont générés depuis `apps/api/schema.gql`, et le test
+  d'instantané de schéma empêche les deux de diverger.
+- ✅ `pnpm test` (341 tests), `pnpm typecheck` et `pnpm build` passent à la
+  racine.
