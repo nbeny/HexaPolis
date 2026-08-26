@@ -1426,7 +1426,15 @@ identiques à `silver.candidacy`.
    publication officielle, contrairement au bloc `Absent` du financement. Le
    critère « son motif *et* un lien vers la source officielle » n'est rempli que
    pour le financement.
-3. **Contradiction du taux à zéro** (voir ci-dessus, `pa793528`).
+3. **Contradiction du taux à zéro** (voir ci-dessus, `pa793528`). *Corrigé le
+   26 août 2026 par la migration
+   `20260826150500_gold_participation_numerateur_absent`, mais pas dans le sens
+   envisagé ci-dessus : le numérateur n'est pas ramené à zéro, c'est le taux qui
+   passe à `NULL`. L'import conserve les positions `NON_VOTANT` (38 323 en base,
+   dont 23 383 sur des scrutins éligibles de la 17e législature), donc un député
+   qui siège sans voter aurait une ligne par scrutin ; zéro ligne signifie que
+   la source ne le nomme pas, jamais qu'il n'a participé à aucun. `0 sur 8 434`
+   aurait été une affirmation que la donnée ne soutient pas.*
 4. **Message d'absence trompeur en pagination.** `/deputes?departmentCode=33&after=b2Zmc2V0OjI1`
    annonce « 12 députés correspondent aux filtres actifs » puis affiche « Aucun
    député ne correspond à ces filtres. Seuls les députés de la 17e législature

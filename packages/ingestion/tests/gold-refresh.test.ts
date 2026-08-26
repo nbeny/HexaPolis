@@ -45,6 +45,10 @@ interface DeputyVoteRow {
  *   mandat.
  * - Chloé arrive après les deux scrutins existants : aucun scrutin éligible
  *   ne tombe dans son mandat, sa participation doit rester NULL, jamais 0.
+ * - Élise siège depuis le début de la législature — le scrutin A, éligible,
+ *   tombe donc dans son mandat — mais la source ne la nomme sur aucun
+ *   scrutin : elle n'a aucune position enregistrée. Dénominateur connu,
+ *   numérateur absent. C'est le cas réel de Chantal Bouloux (PA793528).
  * - David a quitté son mandat (ancien député) : bien qu'il ait une position
  *   de vote enregistrée, il ne doit apparaître dans aucune des deux vues —
  *   ce ne sont pas des fiches pour des députés qui ne siègent plus.
@@ -57,6 +61,7 @@ async function seed(): Promise<{
   bob: string
   chloe: string
   david: string
+  elise: string
   ballotA: string
   ballotB: string
   group: string
@@ -108,6 +113,14 @@ async function seed(): Promise<{
       matchKey: 'david|ancien',
     },
   })
+  const elise = await prisma.person.create({
+    data: {
+      displayName: 'Élise Innommée',
+      firstName: 'Élise',
+      lastName: 'Innommée',
+      matchKey: 'elise|innommee',
+    },
+  })
 
   // Alice et Bob siègent depuis le début de la législature.
   await prisma.mandate.create({
@@ -144,6 +157,21 @@ async function seed(): Promise<{
       territoryId: territory.id,
       kind: 'PARLIAMENTARY',
       startDate: new Date('2022-08-01T00:00:00Z'),
+      endDate: null,
+    },
+  })
+  // Élise siège depuis le début, comme Alice et Bob : le scrutin A tombe donc
+  // dans son mandat. Aucune position ne sera créée pour elle — la source ne la
+  // nomme nulle part.
+  await prisma.mandate.create({
+    data: {
+      naturalKey: 'mandate-elise',
+      personId: elise.id,
+      institutionId: institution.id,
+      legislatureId: legislature17.id,
+      territoryId: territory.id,
+      kind: 'PARLIAMENTARY',
+      startDate: new Date('2022-06-22T00:00:00Z'),
       endDate: null,
     },
   })
@@ -250,7 +278,16 @@ async function seed(): Promise<{
     },
   })
 
-  return { alice: alice.id, bob: bob.id, chloe: chloe.id, david: david.id, ballotA: ballotA.id, ballotB: ballotB.id, group: group.id }
+  return {
+    alice: alice.id,
+    bob: bob.id,
+    chloe: chloe.id,
+    david: david.id,
+    elise: elise.id,
+    ballotA: ballotA.id,
+    ballotB: ballotB.id,
+    group: group.id,
+  }
 }
 
 // Les identifiants Prisma sont des colonnes `text`, même lorsqu'ils sont
@@ -305,9 +342,10 @@ describe('refreshGold', () => {
     }
     const card = results.find((r) => r.view === 'gold.deputy_card')
     const vote = results.find((r) => r.view === 'gold.deputy_vote')
-    // Alice, Bob, Chloé : 3 députés en exercice. David a quitté son mandat.
-    expect(card?.rows).toBe(3)
-    // Alice (1 position) + Bob (2 positions) + Chloé (0) = 3.
+    // Alice, Bob, Chloé, Élise : 4 députés en exercice. David a quitté son
+    // mandat.
+    expect(card?.rows).toBe(4)
+    // Alice (1 position) + Bob (2 positions) + Chloé (0) + Élise (0) = 3.
     expect(vote?.rows).toBe(3)
   })
 
@@ -368,6 +406,43 @@ describe('refreshGold', () => {
     expect(card?.participation_ballot_count).toBeNull()
     expect(card?.participation_vote_count).toBeNull()
     expect(card?.participation_rate).toBeNull()
+  })
+
+  it("laisse le numérateur ET le taux à NULL pour un député dont le mandat couvre des scrutins éligibles mais que la source ne nomme sur aucun", async () => {
+    const { elise } = await seed()
+    await refreshGold(prisma)
+
+    const card = await cardFor(elise)
+    expect(card).toBeDefined()
+    // Le dénominateur, lui, est un fait vérifiable : le scrutin A, publié en
+    // détail nominatif complet, tombe bien dans son mandat.
+    expect(card?.participation_ballot_count).toBe(1)
+    // Aucune position enregistrée : la source ne la nomme pas. L'import
+    // conserve pourtant les positions NON_VOTANT (voir stage-scrutins.ts et
+    // VOTE_CATEGORY_KEYS) — un député qui siège sans voter aurait une ligne.
+    // Zéro ligne n'établit donc pas qu'elle n'a participé à aucun scrutin.
+    expect(card?.vote_count).toBe(0)
+    expect(card?.participation_vote_count).toBeNull()
+    // C'est la contradiction corrigée par la migration
+    // 20260826150500_gold_participation_numerateur_absent : le taux valait
+    // 0.0000 (COALESCE du numérateur) pendant que le numérateur valait NULL.
+    expect(card?.participation_rate).toBeNull()
+  })
+
+  it('ne publie jamais un taux dont l’un des deux termes est absent', async () => {
+    await seed()
+    await refreshGold(prisma)
+
+    // Invariance de la vue, vérifiée sur toute la population plutôt que sur un
+    // député : `participation_rate` est renseigné exactement quand ses deux
+    // termes le sont. Un COALESCE réintroduit d'un côté seulement casse ici.
+    const [row] = await prisma.$queryRaw<{ incoherentes: bigint }[]>`
+      SELECT COUNT(*) AS incoherentes
+      FROM gold.deputy_card
+      WHERE (participation_rate IS NULL)
+        <> (participation_vote_count IS NULL OR participation_ballot_count IS NULL)
+    `
+    expect(Number(row?.incoherentes)).toBe(0)
   })
 
   it("exclut un ancien député (mandat terminé) des deux vues gold, même s'il a des positions de vote enregistrées", async () => {

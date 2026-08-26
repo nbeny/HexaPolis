@@ -36,9 +36,44 @@ function ballotUrl(node: BallotPosition): string | null {
   return `https://www.assemblee-nationale.fr/dyn/${node.legislatureNumber}/scrutins/${node.ballotNumber}`
 }
 
+/**
+ * `gold.deputy_card` laisse les colonnes `participation_*` à `null` pour deux
+ * raisons distinctes, et les confondre reviendrait à écrire une phrase fausse
+ * sur une personne nommée :
+ *
+ * - le **dénominateur** manque : aucun scrutin publié en décompte nominatif ne
+ *   tombe dans un mandat tenu par le député (arrivée tardive), ou une date de
+ *   début de mandat est inconnue et rend la fenêtre invérifiable ;
+ * - le **numérateur** manque alors que le dénominateur existe : la source ne
+ *   nomme le député sur aucun de ces scrutins. Ce n'est pas « il n'a participé
+ *   à aucun » — l'import conserve les positions `NON_VOTANT`, donc un député
+ *   qui siège sans voter aurait quand même une ligne par scrutin. Le silence
+ *   de la source ne s'écrit ni « 0 sur N », ni « 0 % ».
+ */
+function participationAbsence(summary: VotingSummary): {
+  countWhy: string
+  rateWhy: string
+} {
+  if (summary.participationBallotCount === null) {
+    return {
+      countWhy:
+        "Aucun scrutin publié en décompte nominatif ne recoupe un mandat tenu par ce député : le dénominateur n'existe pas.",
+      rateWhy:
+        "Taux non calculable : le dénominateur (scrutins éligibles pendant le mandat) est invérifiable pour ce député. PoliGraph préfère ne rien afficher plutôt qu'un 0 % qui se lirait comme une absence totale.",
+    }
+  }
+
+  const total = formatInteger(summary.participationBallotCount)
+  return {
+    countWhy: `${total} scrutins publiés en décompte nominatif recoupent un mandat tenu par ce député, mais l'Assemblée nationale ne le nomme sur aucun d'eux : le numérateur est introuvable, il ne vaut pas zéro.`,
+    rateWhy: `Taux non calculable : l'Assemblée nationale ne nomme ce député sur aucun des ${total} scrutins éligibles de son mandat. Un silence de la source n'établit pas qu'il fut absent, et PoliGraph n'en tire pas un 0 %.`,
+  }
+}
+
 function summaryFacts(summary: VotingSummary): Fact[] {
   const computed = summary.status === 'COMPUTED'
   const badge = computed ? <ComputedBadge /> : undefined
+  const absence = participationAbsence(summary)
 
   return [
     // Les trois chiffres de synthèse portent sur la seule 17e législature —
@@ -56,8 +91,7 @@ function summaryFacts(summary: VotingSummary): Fact[] {
         summary.participationVoteCount === null || summary.participationBallotCount === null
           ? null
           : `${formatInteger(summary.participationVoteCount)} sur ${formatInteger(summary.participationBallotCount)}`,
-      absentWhy:
-        "Aucun scrutin publié en décompte nominatif ne recoupe un mandat tenu par ce député : le dénominateur n'existe pas.",
+      absentWhy: absence.countWhy,
       badge,
     },
     {
@@ -67,8 +101,7 @@ function summaryFacts(summary: VotingSummary): Fact[] {
       // pourcentage. La multiplication par 100 change l'unité, pas la valeur —
       // c'est la seule du front, et elle ne s'étend à aucun autre chiffre.
       value: summary.participationRate === null ? null : formatPercent(summary.participationRate * 100),
-      absentWhy:
-        "Taux non calculable : le dénominateur (scrutins éligibles pendant le mandat) est invérifiable pour ce député. PoliGraph préfère ne rien afficher plutôt qu'un 0 % qui se lirait comme une absence totale.",
+      absentWhy: absence.rateWhy,
       badge,
     },
   ]

@@ -56,6 +56,38 @@ describe('VotingSection', () => {
     )
     expect(screen.queryByText('0,00 %')).not.toBeInTheDocument()
     expect(screen.getByText(/non calculable/i)).toBeInTheDocument()
+    expect(screen.getByText(/le dénominateur n'existe pas/i)).toBeInTheDocument()
+  })
+
+  it("distingue un numérateur introuvable d'un dénominateur absent, et n'en tire pas 0 %", () => {
+    // Cas réel de Chantal Bouloux (PA793528) : 8 434 scrutins éligibles
+    // recoupent son mandat de 17e législature, mais l'AN ne la nomme sur
+    // aucun. Le dénominateur existe, le numérateur non : dire « le
+    // dénominateur n'existe pas » serait faux, et « 0 % » le serait aussi.
+    render(
+      <VotingSection
+        summary={{
+          ...resume,
+          voteCount: 0,
+          participationBallotCount: 8434,
+          participationVoteCount: null,
+          participationRate: null,
+        }}
+        positions={positions}
+        sources={[]}
+      />,
+    )
+    expect(screen.queryByText('0,00 %')).not.toBeInTheDocument()
+    expect(screen.queryByText(/le dénominateur n'existe pas/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/le numérateur est introuvable, il ne vaut pas zéro/i)).toBeInTheDocument()
+    // `Intl.NumberFormat('fr-FR')` sépare les milliers par une espace fine
+    // insécable (U+202F) : la comparer à une espace ordinaire échouerait.
+    const normalise = (texte: string): string => texte.replace(/\s/g, ' ')
+    expect(
+      screen.getByText((contenu) =>
+        normalise(contenu).includes('aucun des 8 434 scrutins éligibles de son mandat'),
+      ),
+    ).toBeInTheDocument()
   })
 
   it("ne présente jamais une absence de ligne comme une absence du député", () => {
