@@ -1,4 +1,5 @@
 import { Args, ID, Query, Resolver } from '@nestjs/graphql'
+import { optionalArg } from '../common/optional-arg.js'
 import { ProvenanceRecord } from '../models/provenance-record.model.js'
 import { SourceRef } from '../models/source-ref.model.js'
 import { SilverRepository } from '../repositories/silver.repository.js'
@@ -16,9 +17,9 @@ export class ProvenanceResolver {
   async provenance(
     @Args('entityType', { type: () => String }) entityType: string,
     @Args('entityId', { type: () => ID }) entityId: string,
-    @Args('field', { type: () => String, nullable: true }) field: string | undefined,
+    @Args('field', { type: () => String, nullable: true }) field: string | null | undefined,
   ): Promise<ProvenanceRecord[]> {
-    const rows = await this.silverRepository.provenanceFor(entityType, entityId, field)
+    const rows = await this.silverRepository.provenanceFor(entityType, entityId, optionalArg(field))
     return rows.map((row) => {
       const record = new ProvenanceRecord()
       record.entityType = row.entityType

@@ -67,4 +67,18 @@ describe('Query.provenance — descend jusqu’à la ligne bronze', () => {
     const { body } = await testApp.graphql(QUERY, { entityType: 'Person', entityId: fixture.bob.id })
     expect((body.data as any).provenance).toEqual([])
   })
+
+  // SilverRepository.provenanceFor teste `field === undefined` pour choisir
+  // entre les deux requêtes ; `field: null` prenait la branche filtrée
+  // (`p.field = NULL`), qui ne correspond jamais à rien en SQL. `field: null`
+  // doit se comporter comme l'argument omis : toute la provenance de l'entité.
+  it('field: null équivaut à l’absence de filtre', async () => {
+    const { body } = await testApp.graphql(QUERY, {
+      entityType: 'Person',
+      entityId: fixture.alice.id,
+      field: null,
+    })
+    expect(body.errors).toBeUndefined()
+    expect((body.data as any).provenance as any[]).toHaveLength(2)
+  })
 })

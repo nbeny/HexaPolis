@@ -83,6 +83,21 @@ describe('Deputy.ballotPositions — pagination Relay', () => {
     expect(connection.totalCount).toBe(1)
     expect(connection.edges[0].node.legislatureNumber).toBe(16)
   })
+
+  // GoldRepository.listVotes traduisait `legislature === undefined` en
+  // `Prisma.empty`, mais `null` prenait la branche `AND legislature_number =
+  // NULL` — qui ne correspond jamais à aucune ligne en SQL. `legislature:
+  // null` doit se comporter exactement comme l'argument omis.
+  it('legislature: null équivaut à l’absence de filtre : les 4 positions d’Alice reviennent', async () => {
+    const { body } = await testApp.graphql(QUERY, {
+      slug: fixture.alice.slug,
+      legislature: null,
+      first: 10,
+    })
+    expect(body.errors).toBeUndefined()
+    const connection = (body.data as any).deputy.ballotPositions
+    expect(connection.totalCount).toBe(4)
+  })
 })
 
 describe('Deputy.votingSummary — argument legislature', () => {
@@ -110,5 +125,18 @@ describe('Deputy.votingSummary — argument legislature', () => {
     // gold.deputy_card n'agrège la participation que pour la 17e : jamais
     // recalculée pour une autre législature, donc absente plutôt que fausse.
     expect(summary.participationRate).toBeNull()
+  })
+
+  // DeputyResolver.votingSummary testait `legislature === undefined ||
+  // legislature === 17` : faux pour `null`, qui prenait donc la branche de
+  // recalcul et renvoyait les champs de participation à `null` alors que la
+  // carte 17e les porte. `legislature: null` doit lire l'agrégat précalculé,
+  // exactement comme l'argument omis.
+  it('legislature: null lit l’agrégat précalculé — pas de recalcul, participation non nullée', async () => {
+    const { body } = await testApp.graphql(SUMMARY_QUERY, { slug: fixture.alice.slug, legislature: null })
+    expect(body.errors).toBeUndefined()
+    const summary = (body.data as any).deputy.votingSummary
+    expect(summary.voteCount).toBe(3)
+    expect(summary.participationRate).not.toBeNull()
   })
 })

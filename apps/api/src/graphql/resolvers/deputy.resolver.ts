@@ -1,6 +1,7 @@
 import { Args, ID, Int, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql'
 import { anIdFromSlug, buildDeputySlug } from '../common/slug.js'
 import { decodeCursor, encodeCursor } from '../common/cursor.js'
+import { optionalArg } from '../common/optional-arg.js'
 import { clampPageSize, clampSearchLimit } from '../common/pagination.js'
 import { FactStatus } from '../common/fact-status.enum.js'
 import { BallotPosition } from '../models/ballot-position.model.js'
@@ -76,16 +77,22 @@ export class DeputyResolver {
 
   @Query(() => DeputyConnection)
   async deputies(
-    @Args('legislature', { type: () => Int, nullable: true }) legislature: number | undefined,
-    @Args('groupId', { type: () => ID, nullable: true }) groupId: string | undefined,
-    @Args('departmentCode', { type: () => String, nullable: true }) departmentCode: string | undefined,
-    @Args('first', { type: () => Int, nullable: true }) first: number | undefined,
-    @Args('after', { type: () => String, nullable: true }) after: string | undefined,
+    @Args('legislature', { type: () => Int, nullable: true }) legislature: number | null | undefined,
+    @Args('groupId', { type: () => ID, nullable: true }) groupId: string | null | undefined,
+    @Args('departmentCode', { type: () => String, nullable: true })
+    departmentCode: string | null | undefined,
+    @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
+    @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
   ): Promise<InstanceType<typeof DeputyConnection>> {
-    const limit = clampPageSize(first)
-    const offset = after ? decodeCursor(after) : 0
+    const afterValue = optionalArg(after)
+    const limit = clampPageSize(optionalArg(first))
+    const offset = afterValue ? decodeCursor(afterValue) : 0
     const { rows, totalCount } = await this.goldRepository.listCards(
-      { legislature, groupId, departmentCode },
+      {
+        legislature: optionalArg(legislature),
+        groupId: optionalArg(groupId),
+        departmentCode: optionalArg(departmentCode),
+      },
       limit,
       offset,
     )
@@ -106,11 +113,11 @@ export class DeputyResolver {
   @Query(() => [SearchHit])
   async search(
     @Args('query', { type: () => String }) query: string,
-    @Args('first', { type: () => Int, nullable: true }) first: number | undefined,
+    @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
   ): Promise<SearchHit[]> {
     const trimmed = query.trim()
     if (!trimmed) return []
-    const limit = clampSearchLimit(first)
+    const limit = clampSearchLimit(optionalArg(first))
     const cards = await this.goldRepository.searchCards(trimmed, limit)
     return cards.map((card) => {
       const hit = new SearchHit()
@@ -156,15 +163,16 @@ export class DeputyResolver {
   @ResolveField(() => BallotPositionConnection)
   async ballotPositions(
     @Parent() deputy: Deputy,
-    @Args('legislature', { type: () => Int, nullable: true }) legislature: number | undefined,
-    @Args('first', { type: () => Int, nullable: true }) first: number | undefined,
-    @Args('after', { type: () => String, nullable: true }) after: string | undefined,
+    @Args('legislature', { type: () => Int, nullable: true }) legislature: number | null | undefined,
+    @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
+    @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
   ): Promise<InstanceType<typeof BallotPositionConnection>> {
-    const limit = clampPageSize(first)
-    const offset = after ? decodeCursor(after) : 0
+    const afterValue = optionalArg(after)
+    const limit = clampPageSize(optionalArg(first))
+    const offset = afterValue ? decodeCursor(afterValue) : 0
     const { rows, totalCount } = await this.goldRepository.listVotes(
       deputy.id,
-      legislature,
+      optionalArg(legislature),
       limit,
       offset,
     )
@@ -193,8 +201,9 @@ export class DeputyResolver {
   @ResolveField(() => VotingSummary)
   async votingSummary(
     @Parent() deputy: Deputy,
-    @Args('legislature', { type: () => Int, nullable: true }) legislature: number | undefined,
+    @Args('legislature', { type: () => Int, nullable: true }) legislatureArg: number | null | undefined,
   ): Promise<VotingSummary> {
+    const legislature = optionalArg(legislatureArg)
     const card = await this.goldRepository.findCardByPersonId(deputy.id)
     if (!card) {
       const summary = new VotingSummary()

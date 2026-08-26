@@ -43,6 +43,42 @@ describe('Query.deputies', () => {
     const { body } = await testApp.graphql(`{ deputies(legislature: 15, first: 10) { totalCount } }`)
     expect((body.data as any).deputies.totalCount).toBe(0)
   })
+
+  // GraphQL livre `null` pour un argument nullable explicitement passé —
+  // c'est la façon naturelle dont un client généré (InputMaybe<T> = T | null)
+  // exprime « pas de filtre ». Avant la correction, `legislature: null`
+  // échouait le test `!== undefined` de GoldRepository.listCards et renvoyait
+  // une page vide au lieu de la liste complète : un défaut silencieux.
+  it('legislature: null équivaut à l’absence de filtre (pas à une valeur hors périmètre)', async () => {
+    const { body } = await testApp.graphql(
+      `query($legislature: Int) { deputies(legislature: $legislature, first: 10) { totalCount } }`,
+      { legislature: null },
+    )
+    expect(body.errors).toBeUndefined()
+    expect((body.data as any).deputies.totalCount).toBe(2)
+  })
+
+  // `groupId` et `departmentCode` passent par un simple test de vérité
+  // (`if (filters.groupId)`), qui tolère déjà `null` en JavaScript — ce test
+  // fige ce comportement pour qu'un futur refactor (ex. `!== undefined`) ne
+  // le casse pas silencieusement.
+  it('groupId: null équivaut à l’absence de filtre', async () => {
+    const { body } = await testApp.graphql(
+      `query($groupId: ID) { deputies(groupId: $groupId, first: 10) { totalCount } }`,
+      { groupId: null },
+    )
+    expect(body.errors).toBeUndefined()
+    expect((body.data as any).deputies.totalCount).toBe(2)
+  })
+
+  it('departmentCode: null équivaut à l’absence de filtre', async () => {
+    const { body } = await testApp.graphql(
+      `query($departmentCode: String) { deputies(departmentCode: $departmentCode, first: 10) { totalCount } }`,
+      { departmentCode: null },
+    )
+    expect(body.errors).toBeUndefined()
+    expect((body.data as any).deputies.totalCount).toBe(2)
+  })
 })
 
 describe('Query.search', () => {
