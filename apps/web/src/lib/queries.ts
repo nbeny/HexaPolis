@@ -142,6 +142,38 @@ export const DEPUTIES_QUERY = /* GraphQL */ `
   }
 `
 
+/**
+ * Alimente les listes déroulantes de `/deputes`. Le schéma n'expose aucune
+ * requête `groups` ni `departments` : les options sont donc *dérivées* des
+ * députés eux-mêmes, page par page. C'est délibéré — une liste de groupes
+ * parlementaires écrite à la main dans le front serait une donnée non sourcée,
+ * et elle deviendrait fausse à la première scission de groupe sans que rien
+ * ne le signale. Ici, une option n'existe à l'écran que parce qu'au moins un
+ * député la porte en base.
+ *
+ * La requête ne sélectionne que les quatre champs nécessaires aux options :
+ * le balayage complet (567 lignes, 3 pages de 200) reste léger, et son
+ * résultat est mis en cache par `graphqlFetch`.
+ */
+export const FILTER_OPTIONS_QUERY = /* GraphQL */ `
+  query FilterOptions($first: Int, $after: String) {
+    deputies(first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          departmentCode
+          constituencyLabel
+          currentGroupId
+          currentGroupLabel
+        }
+      }
+    }
+  }
+`
+
 export const SEARCH_QUERY = /* GraphQL */ `
   query Search($query: String!, $first: Int) {
     search(query: $query, first: $first) {

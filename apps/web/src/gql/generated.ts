@@ -238,6 +238,14 @@ export type DeputiesQueryVariables = Exact<{
 
 export type DeputiesQuery = { deputies: { totalCount: number, pageInfo: { hasNextPage: boolean, endCursor: string | null }, edges: Array<{ cursor: string, node: { id: string, slug: string, displayName: string, constituencyCode: string | null, constituencyLabel: string | null, departmentCode: string | null, currentGroupId: string | null, currentGroupShortLabel: string | null, currentGroupColor: string | null } }> } };
 
+export type FilterOptionsQueryVariables = Exact<{
+  first: InputMaybe<Scalars['Int']['input']>;
+  after: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type FilterOptionsQuery = { deputies: { pageInfo: { hasNextPage: boolean, endCursor: string | null }, edges: Array<{ node: { departmentCode: string | null, constituencyLabel: string | null, currentGroupId: string | null, currentGroupLabel: string | null } }> } };
+
 export type SearchQueryVariables = Exact<{
   query: Scalars['String']['input'];
   first: InputMaybe<Scalars['Int']['input']>;
