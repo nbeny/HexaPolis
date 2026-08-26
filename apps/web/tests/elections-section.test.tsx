@@ -52,4 +52,15 @@ describe('ElectionsSection', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument()
     expect(screen.getByText(/résultat non importé/i)).toBeInTheDocument()
   })
+
+  // Écart 2 du plan p6, tâche 8 : contrairement au financement, la section
+  // sans aucune candidature n'affichait qu'un motif, sans lien vers la
+  // publication officielle — le critère d'achèvement exige les deux.
+  it('sans aucune candidature, affiche le motif et un lien vers la source officielle (Ministère de l’Intérieur)', () => {
+    render(<ElectionsSection candidacies={[]} sources={[]} />)
+    expect(screen.getByText(/aucune candidature n'est rattachée/i)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /Ministère de l'Intérieur/ })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', expect.stringContaining('data.gouv.fr'))
+  })
 })

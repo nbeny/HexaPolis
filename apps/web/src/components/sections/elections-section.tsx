@@ -1,6 +1,20 @@
+import { Absent } from '@/components/absent'
 import { SectionCard, type SectionSource } from '@/components/section-card'
 import type { DeputyQuery } from '@/gql/generated'
 import { formatInteger, formatPercent } from '@/lib/format'
+
+/**
+ * Même URL que `RESULTATS_T1_URL` dans
+ * `packages/ingestion/src/adapters/resultats/resultats.adapter.ts` — le
+ * fichier que PoliGraph télécharge réellement, pas une page inventée. Le 1er
+ * tour est retenu plutôt que le 2nd : il couvre toutes les circonscriptions
+ * (le 2nd tour n'a lieu que là où personne n'a la majorité absolue au 1er),
+ * c'est donc la ressource la plus complète pour vérifier une candidature
+ * absente. `apps/web` ne dépend pas de `@poligraph/ingestion` : l'URL est
+ * recopiée ici, comme `funding-section.tsx` recopie déjà celle de la CNCCFP.
+ */
+const RESULTATS_OFFICIAL_URL =
+  'https://static.data.gouv.fr/resources/elections-legislatives-des-30-juin-et-7-juillet-2024-resultats-definitifs-du-1er-tour/20240710-171413/resultats-definitifs-par-circonscriptions-legislatives.csv'
 
 type Deputy = NonNullable<DeputyQuery['deputy']>
 type Candidacy = NonNullable<Deputy['candidacies'][number]>
@@ -60,10 +74,12 @@ export function ElectionsSection({
   return (
     <SectionCard title="Élections et résultats" sources={sources}>
       {groups.length === 0 ? (
-        <p className="text-sm text-stone-500 italic">
-          Aucune candidature n&apos;est rattachée à cette personne dans les jeux de données
-          importés.
-        </p>
+        <Absent
+          what="Candidatures et résultats électoraux"
+          why="Aucune candidature n'est rattachée à cette personne dans les jeux de données importés — ni les législatives de 2022 (CNCCFP), ni celles de 2024 (Ministère de l'Intérieur)."
+          officialUrl={RESULTATS_OFFICIAL_URL}
+          officialLabel="Résultats définitifs des législatives 2024, 1er tour — Ministère de l'Intérieur"
+        />
       ) : (
         <div className="space-y-5">
           {groups.map(([label, rounds]) => (
