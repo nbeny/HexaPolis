@@ -1,0 +1,176 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type BallotPosition {
+  ballotDate: DateTime
+  ballotId: ID!
+  ballotNumber: String
+  ballotTitle: String
+  byDelegation: Boolean!
+  groupColorAtVote: String
+  groupLabelAtVote: String
+  groupShortLabelAtVote: String
+  id: ID!
+  legislatureNumber: Int
+  position: String!
+  publicationMode: String
+}
+
+type BallotPositionConnection {
+  edges: [BallotPositionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type BallotPositionEdge {
+  cursor: String!
+  node: BallotPosition!
+}
+
+type BodyMembership {
+  bodyColor: String
+  bodyLabel: String!
+  bodyShortLabel: String
+  bodyType: String!
+  endDate: DateTime
+  id: ID!
+  quality: String
+  startDate: DateTime
+}
+
+type CampaignAccount {
+  currency: String!
+  decisionCode: String
+  declaredDonations: Float
+  declaredExpenses: Float
+  declaredIncome: Float
+  personalFunds: Float
+  retainedExpenses: Float
+  retainedIncome: Float
+}
+
+type Candidacy {
+  account: CampaignAccount
+  displayName: String!
+  elected: Boolean!
+  electionLabel: String!
+  electionYear: Int!
+  id: ID!
+  nuance: String
+  partyName: String
+  round: Int
+  territoryCode: String
+  territoryLabel: String
+  votePctExpressed: Float
+  votePctRegistered: Float
+  votes: Int
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Deputy {
+  ballotPositions(after: String, first: Int, legislature: Int): BallotPositionConnection!
+  birthDate: DateTime
+  candidacies: [Candidacy!]!
+  civility: String
+  committees: [BodyMembership!]!
+  constituencyCode: String
+  constituencyLabel: String
+  currentGroupColor: String
+  currentGroupId: String
+  currentGroupLabel: String
+  currentGroupShortLabel: String
+  departmentCode: String
+  displayName: String!
+  firstName: String!
+  groupMemberships: [BodyMembership!]!
+  id: ID!
+  lastName: String!
+  mandates: [Mandate!]!
+  slug: String!
+  sources: [SourceRef!]!
+  votingSummary(legislature: Int): VotingSummary!
+}
+
+type DeputyConnection {
+  edges: [DeputyEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type DeputyEdge {
+  cursor: String!
+  node: Deputy!
+}
+
+"""
+Distingue un fait publié tel quel (OFFICIAL), normalisé mais fidèle (NORMALIZED), d'un agrégat calculé par PoliGraph (COMPUTED).
+"""
+enum FactStatus {
+  COMPUTED
+  NORMALIZED
+  OFFICIAL
+}
+
+type Mandate {
+  endCause: String
+  endDate: DateTime
+  id: ID!
+  institutionLabel: String!
+  kind: String!
+  legislatureNumber: Int
+  startDate: DateTime
+  territoryCode: String
+  territoryLabel: String
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+}
+
+type ProvenanceRecord {
+  bronzeRef: String!
+  bronzeTable: String!
+  entityId: ID!
+  entityType: String!
+  field: String
+  importRunId: ID!
+  source: SourceRef
+  status: FactStatus!
+}
+
+type Query {
+  deputies(after: String, departmentCode: String, first: Int, groupId: ID, legislature: Int): DeputyConnection!
+  deputy(slug: String!): Deputy
+  provenance(entityId: ID!, entityType: String!, field: String): [ProvenanceRecord!]!
+  search(first: Int, query: String!): [SearchHit!]!
+}
+
+type SearchHit {
+  constituencyLabel: String
+  currentGroupLabel: String
+  displayName: String!
+  personId: ID!
+  slug: String!
+}
+
+type SourceRef {
+  importedAt: DateTime
+  label: String!
+  sourceId: ID!
+}
+
+type VotingSummary {
+  committeeCount: Int!
+  mandateCount: Int!
+  participationBallotCount: Int
+  participationRate: Float
+  participationVoteCount: Int
+  status: FactStatus!
+  voteCount: Int!
+}

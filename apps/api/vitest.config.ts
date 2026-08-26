@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
@@ -12,6 +13,18 @@ try {
   // .env absent (ex. CI) : les variables sont déjà fournies par l'environnement.
 }
 
+// `graphql` n'a pas de champ `exports` : Node, en `require()`, résout son
+// entrée CJS (`main: index.js`) — c'est ce que charge la chaîne interne de
+// `@nestjs/graphql`/`@apollo/server`. Mais le résolveur de Vite, pour un
+// `import` ESM comme celui de schema-snapshot.test.ts, privilégie le champ
+// `module` (`index.mjs`) : deux fichiers distincts, donc deux classes
+// `GraphQLObjectType` distinctes. `graphql` refuse alors de comparer une
+// instance de l'une à une instance de l'autre (« Cannot use GraphQLObjectType
+// from another module or realm »). On force, via un alias, tout le graphe de
+// test à résoudre `graphql` vers le même fichier que `require('graphql')`.
+const require = createRequire(import.meta.url)
+const graphqlCjsEntry = require.resolve('graphql')
+
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
@@ -20,6 +33,9 @@ export default defineConfig({
     // remettent à zéro dans leur beforeEach ; voir le commentaire équivalent
     // dans packages/ingestion/vitest.config.ts.
     fileParallelism: false,
+  },
+  resolve: {
+    alias: { graphql: graphqlCjsEntry },
   },
   // esbuild (transformateur par défaut de vitest) supporte la syntaxe des
   // décorateurs mais pas `emitDecoratorMetadata` : il ne fait pas de

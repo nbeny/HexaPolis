@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { APP_GUARD } from '@nestjs/core'
 import { type DynamicModule, Module } from '@nestjs/common'
 import { ApolloDriver, type ApolloDriverConfig } from '@nestjs/apollo'
@@ -46,7 +47,8 @@ export class ServerModule {
         ThrottlerModule.forRoot([{ ttl: throttle.ttl, limit: throttle.limit }]),
         GraphQLModule.forRoot<ApolloDriverConfig>({
           driver: ApolloDriver,
-          autoSchemaFile: true,
+          autoSchemaFile: fileURLToPath(new URL('../schema.gql', import.meta.url)),
+          sortSchema: true,
           playground: false,
           introspection: true,
           validationRules: buildDepthLimitRule(maxDepth),
