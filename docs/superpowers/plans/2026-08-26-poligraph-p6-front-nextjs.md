@@ -1521,6 +1521,71 @@ même agrégation, sans parcours supplémentaire.
    réel : `?q=Corbiere` comme `?q=Corbière` trouvent tous deux Alexis Corbière.*
 6. **48 députés sans résultat électoral 2024** (8,5 %) — aucune candidature
    rattachée du tout, donc « Aucune candidature… » sur leur fiche.
+
+   *Volet « compte de campagne », traité le 26 août 2026 (troisième vague
+   d'arbitrages).* La même absence de rattachement frappait le financement :
+   une fiche affichait « Compte de campagne — donnée non disponible » avec un
+   motif qui imputait l'absence au calendrier de publication de la CNCCFP,
+   alors que le compte de 2022 était bel et bien en base, non rattaché faute
+   d'avoir su rapprocher les formes de nom. Périmètre réellement mesuré, et
+   non supposé — critère retenu : une candidature CNCCFP à `person_id IS NULL`
+   dont la circonscription publiée est celle d'un député dont le mandat de la
+   17e législature est ouvert, ET dont le nom normalisé (`normalizeToken`,
+   même règle que `normalizeNameForMatching`) est une variante de celui de ce
+   député. Sur les 5 686 candidatures CNCCFP non rattachées, **7** répondent à
+   ce critère, dont **5 décidables** et **2 irréductiblement ambiguës**.
+
+   Les 5 décisions écrites dans `data/identity-decisions.yaml` (troisième
+   bloc) : `202202659` Favennec → Favennec-Bécot (53-3), `202204631` Lucas →
+   Lucas-Lundy (78-8), `202200632` Taché de la Pagerie → Taché (13-16),
+   `202205641` Gouffier-Cha → Gouffier Valente (94-6), `202201860` Le
+   Nabour-Cloarec → Le Nabour (35-5). Les deux dernières n'étaient pas
+   connues avant cette vérification. Chacune vérifiée sur trois points : une
+   seule titularité de mandat ouvert pour la circonscription en 17e
+   législature ; **le même acteur détenait déjà le mandat de cette
+   circonscription en 16e législature, ouvert au scrutin de 2022** — donc la
+   candidature n'est pas celle d'un rival ; et aucun autre compte du fichier
+   ne porte un nom confondable.
+
+   Les 2 rejetées : les deux comptes `Mme ROUSSEAU Sandrine` de la 9e de
+   Paris (`202204221` ECO, `202204216` DVD), strictement homonymes dans la
+   même circonscription. Rien dans la source ne les distingue hors la nuance
+   politique, qui est une étiquette et non un fait d'identité ; les deux
+   restent `PROBABLE` / `AUTO`, non rattachés. C'est le cas que la règle
+   `uniqueInDistrict` de `normalize-cnccfp.ts` existe pour bloquer.
+
+   Contrôles après renormalisation `cnccfp:comptes --renormalize` :
+   `silver.person` toujours à **3 119** (cette source ne crée aucune
+   personne) ; candidatures CNCCFP rattachées **604 → 609**, soit exactement
+   +5 ; répartition finale 604 `AUTO`/`CONFIRMED` inchangées + 5
+   `HUMAN`/`CONFIRMED`, donc aucune candidature qui devait rester non
+   rattachée ne l'a été ; députés avec un compte de campagne 409 → 414. Vérifié
+   en réel sur `/deputes/pa795636-benjamin-lucas-lundy` : la section rend
+   désormais « Élections législatives 2022 — 8ème circonscription des
+   Yvelines / Dépenses déclarées — 50 392,00 € / Recettes déclarées —
+   51 687,00 € / Dons déclarés — 600,00 € / Apport personnel — 35 000,00 € /
+   Dépenses retenues par la CNCCFP — 50 392,00 € / Recettes retenues par la
+   CNCCFP — 51 687,00 € / Code de décision publié par la CNCCFP — A »,
+   identique à `silver.campaign_account`.
+
+   *Motif d'absence corrigé.* `apps/web/src/components/sections/funding-section.tsx`
+   n'affirme plus une cause. La section ne reçoit que les candidatures **déjà
+   rattachées** : une candidature non rattachée lui est indiscernable d'une
+   candidature inexistante, elle ne peut donc pas distinguer « ce député ne
+   s'est pas présenté en 2022 » de « son compte de 2022 existe mais n'est pas
+   relié à lui ». Elle énonce désormais le périmètre importé et laisse les
+   deux causes ouvertes. Rendu réel sur `/deputes/pa795454-karim-ben-cheikh` :
+   « Seuls les comptes des législatives de 2022 sont importés à ce jour ; ceux
+   des législatives de 2024 ne le sont pas. Aucune candidature de 2022 n'est
+   rattachée à cette personne : soit elle ne s'est pas présentée à ce scrutin,
+   soit son compte y figure sous une forme de nom que le rapprochement n'a pas
+   encore reliée à elle. PoliGraph ne peut pas trancher entre ces deux cas, et
+   ne prétend donc pas que la donnée n'existe pas. » La branche « candidature
+   de 2022 rattachée mais sans compte » est écrite et testée bien qu'elle
+   concerne 0 fiche sur 577 aujourd'hui (toutes les candidatures de 2022 en
+   base viennent de la CNCCFP et portent donc un compte) : sans elle, une
+   candidature de 2022 venue d'une autre source ferait affirmer à tort
+   qu'aucune n'est rattachée.
 7. **Arbitrages limités au second tour.** Les 6 identités arbitrées à la main
    sont les 6 seules à n'avoir que le tour 2 en base (441 députés ont les deux
    tours, 72 n'ont que le tour 1 parce qu'ils ont été élus au premier).
@@ -1630,6 +1695,57 @@ même agrégation, sans parcours supplémentaire.
     dénominateur de ces 27 députés. Les séparer exige d'ajouter la date de
     prise de fonction à la clé naturelle, c'est-à-dire une migration de données
     (§6.2), pas une correction de code.
+
+12. **La circonscription des comptes CNCCFP est fausse en Corse et pour les
+    Français de l'étranger.** *Relevé le 26 août 2026 en établissant le
+    périmètre de la troisième vague d'arbitrages (écart 6). Non corrigé : ce
+    n'est pas un défaut d'identité et il ne se répare pas par des décisions
+    humaines.* `districtCodeFromRow`
+    (`packages/ingestion/src/adapters/cnccfp/normalize-cnccfp.ts`) dérive le
+    code `Territory` du couple (`code_departement`, `circonscription`) publié
+    par la CNCCFP. Deux familles de lignes le mettent en défaut :
+
+    - **Corse, 43 lignes.** La CNCCFP publie `20A` / `20B` là où les codes
+      `Territory` sont `2A` / `2B`. Le code dérivé (`20A-1`…) ne correspond à
+      aucun `Territory` : `territory_id` reste `NULL`. Ce sont les **43
+      seules** candidatures de 2022 sans territoire en base.
+    - **Français établis hors de France, 149 lignes.** La CNCCFP publie
+      `code_departement = 75` (Paris, département de dépôt) avec
+      `circonscription = « Français établis hors de France - Nème
+      circonscription »`. Le code dérivé est donc `75-N`, **une vraie
+      circonscription de Paris**. Le compte de Pieyre-Alexandre Anglade (FE-4)
+      est actuellement rattaché au territoire `75-4`. Ce cas est plus grave
+      que l'absence : c'est une donnée fausse, et un MERGE d'identité
+      l'afficherait telle quelle sur la fiche, la section « Financement »
+      rendant `candidacy.territoryLabel`.
+
+    Conséquence mesurée : **10** de ces 192 candidatures correspondent, nom
+    pour nom et circonscription pour circonscription une fois le code corrigé,
+    à un député dont le mandat de la 17e législature est ouvert — Marcangeli
+    (2A-1), Colombani (2A-2), Castellani (2B-1), Ceccoli (2B-2), Anglade
+    (099-4), Ferracci (099-6), Petit (099-7), Ben Cheikh (099-9), Lakrafi
+    (099-10), Genetet (099-11). Leur compte de campagne existe en base et
+    n'est rattaché à personne. Aucune décision d'arbitrage n'a été écrite pour
+    eux : le blocage n'est pas la forme du nom (elle est identique des deux
+    côtés) mais la dérivation du territoire, et dix arbitrages manuels
+    masqueraient un défaut qui touche 192 lignes. Le correctif est dans
+    `districtCodeFromRow` — reconnaître `20A`/`20B` et le libellé « Français
+    établis hors de France » (code `099` en base) — suivi d'une
+    renormalisation qui laissera la cascade rattacher ces dix-là toute seule.
+
+13. **Homonymes exacts dans une autre circonscription : 12 cas indécidables.**
+    *Relevé le 26 août 2026, même vérification.* Douze candidatures CNCCFP non
+    rattachées portent la clé de nom **exacte** d'un député de la 17e
+    législature, mais dans une autre circonscription que la sienne (ex.
+    `202201099` Matthieu BLOCH, 25-4, alors que le député Matthieu Bloch siège
+    pour 25-3 ; `202202226` Thierry PEREZ, 43-2, alors que le député Thierry
+    Perez siège pour 38-10). Certaines sont sûrement le même individu ayant
+    changé de circonscription entre 2022 et 2024, d'autres sûrement des
+    homonymes — et rien en base ne permet de trancher : la CNCCFP ne publie
+    aucune date de naissance, donc le seul élément commun est le nom, ce qui
+    est précisément ce que la spec interdit de tenir pour une preuve. Aucune
+    décision écrite. Trancher exigerait un fait d'identité extérieur au
+    périmètre importé.
 
 ---
 

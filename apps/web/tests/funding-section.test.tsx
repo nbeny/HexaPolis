@@ -36,6 +36,31 @@ describe('FundingSection', () => {
     expect(screen.getByRole('link', { name: /CNCCFP/ })).toBeInTheDocument()
   })
 
+  // Le motif d'absence ne doit jamais imputer l'absence au calendrier de la
+  // CNCCFP : un compte de 2022 peut exister en base sans être rattaché, et
+  // c'est arrivé (cinq arbitrages du 26 août 2026). La rédaction doit laisser
+  // les deux causes ouvertes.
+  it("n'impute pas l'absence au calendrier de publication de la CNCCFP", () => {
+    render(
+      <FundingSection
+        candidacies={[{ ...candidature2022, electionYear: 2024, account: null }]}
+        sources={[]}
+      />,
+    )
+    expect(screen.queryByText(/pas encore publié/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/par vagues/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/forme de nom que le rapprochement/i)).toBeInTheDocument()
+    expect(screen.getByText(/ne peut pas trancher/i)).toBeInTheDocument()
+  })
+
+  it('dit que la candidature de 2022 est rattachée quand elle l’est, sans compte associé', () => {
+    render(
+      <FundingSection candidacies={[{ ...candidature2022, account: null }]} sources={[]} />,
+    )
+    expect(screen.getByText(/aucun compte de campagne ne lui est associé/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Aucune candidature de 2022/i)).not.toBeInTheDocument()
+  })
+
   it("n'affiche pas 0 € pour un montant non déclaré", () => {
     render(<FundingSection candidacies={[candidature2022]} sources={[]} />)
     // `declaredDonations` est null : il ne doit apparaître ni comme 0 € ni

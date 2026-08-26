@@ -31,6 +31,43 @@
 # toujours qu'un seul titulaire de mandat parlementaire sous la 17e
 # législature (68 circonscriptions sur 577 en ont eu plusieurs ; aucune de ces
 # six n'en fait partie).
+#
+# Troisième usage (26 août 2026) : cinq COMPTES DE CAMPAGNE de la CNCCFP
+# (législatives de 2022) restés non rattachés. Le blocage n'est plus la forme
+# du nom publiée par le ministère mais celle publiée par la CNCCFP, qui
+# agglomère civilité, patronyme en majuscules et prénom dans un seul champ
+# (voir `splitCnccfpName`, `packages/domain/src/cnccfp-name.ts`) et retient
+# tantôt un patronyme composé que l'Assemblée nationale abrège, tantôt
+# l'inverse. La CNCCFP ne publiant aucune date de naissance, le meilleur
+# niveau atteignable automatiquement depuis cette source est PROBABLE, jamais
+# CONFIRMED : l'arbitrage humain est le seul chemin. Conséquence de l'absence,
+# et raison de cette troisième vague : la section « Financement de campagne »
+# de ces cinq fiches affichait « Compte de campagne — donnée non disponible »
+# alors que le compte est en base, sous un autre nom.
+#
+# Chaque cas a été vérifié sur trois points avant d'être écrit :
+#   (a) la circonscription publiée par la CNCCFP n'a qu'un seul titulaire d'un
+#       mandat parlementaire OUVERT sous la 17e législature (les 577
+#       circonscriptions en ont exactement un chacune une fois les mandats
+#       clos exclus — 68 en ont eu plusieurs au fil de la législature) ;
+#   (b) ce même titulaire détenait déjà le mandat de cette circonscription
+#       sous la 16e législature, ouvert à la date du scrutin de 2022 : il y
+#       était donc bien candidat en 2022, et la candidature n'est pas celle
+#       d'un rival. C'est la vérification qui manquerait le plus si elle
+#       n'était pas faite — plusieurs députés de 2024 ont pris un siège
+#       qu'un autre occupait en 2022 ;
+#   (c) le fichier CNCCFP ne contient, ni dans cette circonscription ni
+#       ailleurs en France, un autre compte dont le nom puisse être confondu
+#       avec le sien.
+#
+# Deux cas ont été examinés et REJETÉS, sans décision écrite : les deux
+# comptes déposés sous « Mme ROUSSEAU Sandrine » dans la 9e circonscription de
+# Paris (`202204221`, nuance ECO, et `202204216`, nuance DVD). Ils portent
+# strictement le même nom dans la même circonscription ; rien dans la source
+# ne les distingue hors la nuance politique, qui est une étiquette et non un
+# fait d'identité. C'est exactement le cas que la règle `uniqueInDistrict` de
+# `normalize-cnccfp.ts` existe pour bloquer, et le rattachement à l'aveugle
+# attribuerait à une députée les finances de campagne d'une inconnue.
 decisions:
   - decision: MERGE
     left:
@@ -228,4 +265,112 @@ decisions:
       17 308 voix. La circonscription n'a qu'un seul titulaire d'un mandat
       parlementaire sous la 17e législature, Mereana Reid Arbelot (PA795240),
       depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  # --- Comptes de campagne CNCCFP 2022 (26 août 2026) ---
+
+  - decision: MERGE
+    left:
+      source: "CNCCFP"
+      key: "202202659"
+    right:
+      source: "AN"
+      key: "PA267042"
+    reason: >-
+      Compte de campagne 2022 publié par la CNCCFP sous « M. FAVENNEC
+      Yannick », sans le patronyme composé (« Bécot ») porté par l'Assemblée
+      nationale — le même écart de forme que la décision DATA_GOUV
+      ci-dessus, une source plus loin. Circonscription publiée : « Mayenne -
+      3e circonscription » (53-3), dont l'unique titulaire d'un mandat
+      parlementaire ouvert sous la 17e législature est Yannick Favennec-Bécot
+      (PA267042) ; le même acteur détenait déjà le mandat de cette
+      circonscription sous la 16e législature, ouvert le 2022-06-12 — élu dès
+      le premier tour de 2022, il y était donc bien candidat, et ce compte
+      n'est pas celui d'un rival. Aucun autre des 6 290 comptes du fichier ne
+      porte le patronyme « Favennec ». Montants publiés : 29 392 € de dépenses
+      déclarées, 30 420 € de recettes, décision « ARM ».
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "CNCCFP"
+      key: "202204631"
+    right:
+      source: "AN"
+      key: "PA795636"
+    reason: >-
+      Compte de campagne 2022 publié sous « M. LUCAS Benjamin », sans le
+      patronyme composé (« Lundy ») porté par l'Assemblée nationale.
+      Circonscription publiée : « Yvelines - 8e circonscription » (78-8), dont
+      l'unique titulaire d'un mandat parlementaire ouvert sous la 17e
+      législature est Benjamin Lucas-Lundy (PA795636) ; le même acteur
+      détenait déjà le mandat de cette circonscription sous la 16e
+      législature, ouvert le 2022-06-19, date du second tour de 2022. Cinq
+      autres comptes du fichier portent « Lucas » (Bruno, Fabrice, Johann,
+      Yann, et Marie Madeleine Doré-Lucas) : tous dans une autre
+      circonscription et sous un autre prénom. Montants publiés : 50 392 € de
+      dépenses déclarées, 51 687 € de recettes, décision « A ».
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "CNCCFP"
+      key: "202200632"
+    right:
+      source: "AN"
+      key: "PA793382"
+    reason: >-
+      Compte de campagne 2022 publié sous « M. TACHE DE LA PAGERIE Emmanuel »
+      (sans accent), forme complète là où l'Assemblée nationale enregistre la
+      forme réduite « Taché ». Circonscription publiée : « Bouches-du-Rhône -
+      16e circonscription » (13-16), dont l'unique titulaire d'un mandat
+      parlementaire ouvert sous la 17e législature est Emmanuel Taché
+      (PA793382) ; le même acteur détenait déjà le mandat de cette
+      circonscription sous la 16e législature, ouvert le 2022-06-19. Aucun
+      autre compte du fichier ne porte le patronyme « Tache de la Pagerie ».
+      Montants publiés : 19 938 € de dépenses déclarées, 21 089 € de recettes,
+      nuance RN, décision « A ».
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "CNCCFP"
+      key: "202205641"
+    right:
+      source: "AN"
+      key: "PA721296"
+    reason: >-
+      Compte de campagne 2022 publié sous « M. GOUFFIER-CHA Guillaume »,
+      patronyme composé dont l'Assemblée nationale n'enregistre plus que le
+      premier élément suivi d'un second différent (« Gouffier Valente ») : les
+      deux formes n'ont que « Gouffier » en commun, ce qui suffit à interdire
+      tout rapprochement automatique. Circonscription publiée : « Val-de-Marne
+      - 6e circonscription » (94-6), dont l'unique titulaire d'un mandat
+      parlementaire ouvert sous la 17e législature est Guillaume Gouffier
+      Valente (PA721296) ; le même acteur détenait déjà le mandat de cette
+      circonscription sous la 16e législature, ouvert le 2022-06-19 — il en
+      était donc le candidat élu en 2022. Aucun autre compte du fichier, dans
+      cette circonscription ou ailleurs, ne porte un patronyme commençant par
+      « Gouffier ». Montants publiés : 41 396 € de dépenses déclarées,
+      41 403 € de recettes, nuance ENS, décision « ARM ».
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "CNCCFP"
+      key: "202201860"
+    right:
+      source: "AN"
+      key: "PA719756"
+    reason: >-
+      Compte de campagne 2022 publié sous « Mme LE NABOUR-CLOAREC Christine »,
+      patronyme composé que l'Assemblée nationale enregistre sous sa forme
+      réduite « Le Nabour ». Circonscription publiée : « Ille-et-Vilaine - 5e
+      circonscription » (35-5), dont l'unique titulaire d'un mandat
+      parlementaire ouvert sous la 17e législature est Christine Le Nabour
+      (PA719756) ; la même actrice détenait déjà le mandat de cette
+      circonscription sous la 16e législature, ouvert le 2022-06-19. Aucun
+      autre compte du fichier ne porte le patronyme « Le Nabour ». Montants
+      publiés : 27 591 € de dépenses déclarées, 27 596 € de recettes, nuance
+      ENS, décision « ARRRM ».
     decidedOn: "2026-08-26"
