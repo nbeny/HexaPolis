@@ -36,6 +36,7 @@ function cardToDeputy(card: DeputyCard): Deputy {
   deputy.constituencyCode = card.constituencyCode ?? undefined
   deputy.constituencyLabel = card.constituencyLabel ?? undefined
   deputy.departmentCode = card.departmentCode ?? undefined
+  deputy.takingOfficeDate = card.takingOfficeDate ?? undefined
   deputy.currentGroupId = card.currentGroupId ?? undefined
   deputy.currentGroupLabel = card.currentGroupLabel ?? undefined
   deputy.currentGroupShortLabel = card.currentGroupShortLabel ?? undefined

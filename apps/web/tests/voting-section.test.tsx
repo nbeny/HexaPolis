@@ -38,6 +38,13 @@ const resume = {
   participationExpressedRate: 0.8,
 }
 
+/**
+ * Date d'entrée en fonction publiée par l'Assemblée pour le mandat en cours.
+ * Affichée à côté du dénominateur : c'est elle qui dit sur quelle fenêtre le
+ * taux est calculé.
+ */
+const PRISE_FONCTION = '2024-07-08'
+
 const positions = {
   totalCount: 412,
   pageInfo: { hasNextPage: true, endCursor: 'Y3Vyc29yOjI1' },
@@ -62,13 +69,13 @@ const positions = {
 
 describe('VotingSection', () => {
   it('marque les chiffres de participation comme calculés', () => {
-    render(<VotingSection summary={resume} positions={positions} sources={[]} />)
+    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
     expect(screen.getByText(/80,00 %/)).toBeInTheDocument()
     expect(screen.getAllByText(/calculé par PoliGraph/i).length).toBeGreaterThan(0)
   })
 
   it('décompose la participation au lieu de publier un pourcentage seul', () => {
-    render(<VotingSection summary={resume} positions={positions} sources={[]} />)
+    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
 
     // Les quatre décomptes dont le taux est tiré sont sur la fiche, dans
     // l'ordre du plus large au plus étroit.
@@ -106,6 +113,7 @@ describe('VotingSection', () => {
           participationExpressedRate: 0.011,
         }}
         positions={positions}
+        takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
     )
@@ -129,6 +137,7 @@ describe('VotingSection', () => {
           participationExpressedRate: 0.011,
         }}
         positions={positions}
+        takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
     )
@@ -154,6 +163,7 @@ describe('VotingSection', () => {
           participationExpressedRate: null,
         }}
         positions={positions}
+        takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
     )
@@ -182,6 +192,7 @@ describe('VotingSection', () => {
           participationExpressedRate: null,
         }}
         positions={positions}
+        takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
     )
@@ -213,6 +224,7 @@ describe('VotingSection', () => {
           participationExpressedRate: 0.1909,
         }}
         positions={positions}
+        takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
     )
@@ -222,11 +234,59 @@ describe('VotingSection', () => {
   })
 
   it("ne présente jamais une absence de ligne comme une absence du député", () => {
-    render(<VotingSection summary={resume} positions={positions} sources={[]} />)
+    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
     // 412 scrutins nommés sur 500 éligibles : les 88 restants ne sont PAS des
     // absences constatées — l'AN ne nomme sur un scrutin que les députés pour
     // lesquels une position a été enregistrée.
     expect(texteVisible('ne publie pas le détail nominatif')).toBeInTheDocument()
     expect(texteVisible("ne se lit pas comme un nombre d'absences")).toBeInTheDocument()
+  })
+
+  it("affiche la date d'entrée en fonction à côté du dénominateur qu'elle explique", () => {
+    // Cas réel de Marie-Sophie Bernadeau (PA793924), entrée en fonction le
+    // 2026-07-20 : 17 scrutins éligibles, l'Assemblée la nomme sur 4. Avant
+    // l'écart 11, la fiche affichait « 4 sur 8 434 — 0,05 % ». Le taux corrigé
+    // est exact mais repose sur dix-sept scrutins : il ne se compare pas aux
+    // 8 434 d'un collègue en fonction depuis l'ouverture, et la fiche doit
+    // donner au lecteur de quoi le voir.
+    render(
+      <VotingSection
+        summary={{
+          ...resume,
+          voteCount: 4,
+          participationBallotCount: 17,
+          participationNamedCount: 4,
+          participationExpressedCount: 4,
+          participationNonVotingCount: 0,
+          participationExpressedRate: 0.2353,
+        }}
+        positions={positions}
+        takingOfficeDate="2026-07-20"
+        sources={[]}
+      />,
+    )
+
+    expect(screen.getByText('20 juillet 2026')).toBeInTheDocument()
+    expect(texteVisible('4 sur 17')).toBeInTheDocument()
+    expect(texteVisible("s'ouvre à la date d'entrée en fonction")).toBeInTheDocument()
+    expect(texteVisible('ne se comparent pas')).toBeInTheDocument()
+    // Aucune phrase ne qualifie le député : la fiche publie des dates et des
+    // décomptes, la lecture appartient au lecteur.
+    for (const jugement of [/absentéis/i, /assidu/i, /nouveau venu/i, /peu présent/i]) {
+      expect(screen.queryByText(jugement)).not.toBeInTheDocument()
+    }
+  })
+
+  it("dit que la fenêtre retombe sur la date de début quand la source ne publie pas d'entrée en fonction", () => {
+    render(
+      <VotingSection summary={resume} positions={positions} takingOfficeDate={null} sources={[]} />,
+    )
+
+    // Pas de date inventée, pas de repli silencieux sur la date de début : le
+    // motif d'absence dit où le lecteur trouve la date réellement utilisée.
+    expect(
+      texteVisible("ne publie pas de date d'entrée en fonction pour le mandat en cours"),
+    ).toBeInTheDocument()
+    expect(texteVisible('la section « Mandats »')).toBeInTheDocument()
   })
 })

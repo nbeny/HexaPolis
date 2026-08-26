@@ -29,6 +29,7 @@ describe('deputy(slug) — fiche complète', () => {
           slug
           displayName
           civility
+          takingOfficeDate
           mandates { kind legislatureNumber territoryLabel startDate endDate }
           groupMemberships { bodyLabel }
           committees { bodyLabel }
@@ -43,6 +44,14 @@ describe('deputy(slug) — fiche complète', () => {
     const deputy = (body.data as any).deputy
     expect(deputy.id).toBe(fixture.alice.id)
     expect(deputy.displayName).toBe('Alice Dupont')
+
+    // Date d'entrée en fonction du mandat en cours, publiée par l'AN et
+    // distincte de la date de début du mandat : c'est elle qui ouvre le
+    // dénominateur de participation, et la fiche l'affiche à côté de lui.
+    // Fait de source, pas un agrégat : porté par `Deputy`, pas par
+    // `votingSummary` dont le `status` vaut COMPUTED.
+    expect(deputy.takingOfficeDate).toBe(new Date('2022-06-23T00:00:00Z').toISOString())
+    expect(deputy.mandates.some((m: any) => m.startDate === deputy.takingOfficeDate)).toBe(false)
 
     // Mandats : deux, une législature ouverte et une close (spec — section « Mandats »).
     expect(deputy.mandates).toHaveLength(2)

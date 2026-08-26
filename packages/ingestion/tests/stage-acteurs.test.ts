@@ -92,6 +92,30 @@ describe('stageActeurs', () => {
     expect(mandats.every((m) => acteurUids.has(m.acteurRef))).toBe(true)
   })
 
+  it('stage la date de prise de fonction sans écraser la date de début du mandat', async () => {
+    const run = await freshRun()
+    await stageActeurs(prisma, FIXTURE, run)
+
+    // Les deux dates viennent de deux endroits différents du même nœud
+    // `mandat` : `dateDebut` à la racine (ouverture du mandat du siège) et
+    // `mandature.datePriseFonction` (entrée en fonction de la personne). Les
+    // confondre est le défaut qui faisait mesurer un député arrivé en cours de
+    // législature contre les scrutins tenus avant son arrivée.
+    const barnier = await prisma.anMandatRaw.findFirstOrThrow({
+      where: { typeOrgane: 'ASSEMBLEE', acteurRef: 'PA368' },
+    })
+    expect(barnier.dateDebut).toBe('2025-09-28')
+    expect(barnier.datePriseFonction).toBe('2025-09-29')
+
+    // L'AN ne publie cette date que sur les mandats parlementaires : bronze la
+    // laisse nulle ailleurs plutôt que d'en inventer une.
+    const organes = await prisma.anMandatRaw.findMany({
+      where: { typeOrgane: { not: 'ASSEMBLEE' } },
+    })
+    expect(organes.length).toBeGreaterThan(0)
+    expect(organes.every((m) => m.datePriseFonction === null)).toBe(true)
+  })
+
   it('conserve la circonscription du mandat parlementaire', async () => {
     const run = await freshRun()
     await stageActeurs(prisma, FIXTURE, run)

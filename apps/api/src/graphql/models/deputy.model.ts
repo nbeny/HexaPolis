@@ -48,6 +48,23 @@ export class Deputy {
   @Field({ nullable: true })
   departmentCode?: string
 
+  /**
+   * Date à laquelle le député est entré en fonction pour son mandat en cours,
+   * telle que l'Assemblée nationale la publie. Fait de source, pas un calcul :
+   * ce champ ne porte pas le marquage `COMPUTED` de `VotingSummary`, même s'il
+   * vient de la même ligne `gold.deputy_card`.
+   *
+   * Distincte de la date de début du mandat (`Mandate.startDate`), qui vaut
+   * l'ouverture de la législature pour presque tous les députés. C'est à cette
+   * date que s'ouvre le dénominateur `votingSummary.participationBallotCount` :
+   * les deux se lisent ensemble, et la fiche les affiche côte à côte.
+   *
+   * `null` quand la source ne publie pas de date d'entrée en fonction pour ce
+   * mandat — la fenêtre retombe alors sur la date de début du mandat.
+   */
+  @Field({ nullable: true })
+  takingOfficeDate?: Date
+
   @Field({ nullable: true })
   currentGroupId?: string
 

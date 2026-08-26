@@ -94,6 +94,123 @@ describe('normalizeAn', () => {
     expect(mandats.every((m) => m.legislatureId !== null)).toBe(true)
   })
 
+  it('lit la date de prise de fonction dans mandature.datePriseFonction, sans écraser la date de début', async () => {
+    const run = await stageFixture('c1')
+    await normalizeAn(prisma, run)
+
+    // PA368 : l'AN publie `dateDebut = 2025-09-28` (ouverture du mandat du
+    // siège) et `mandature.datePriseFonction = 2025-09-29` (entrée en fonction
+    // de la personne). Les deux sont vraies et répondent à deux questions
+    // différentes ; silver porte les deux.
+    const identifier = await prisma.externalIdentifier.findUniqueOrThrow({
+      where: { sourceId_kind_value: { sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA368' } },
+    })
+    const mandat = await prisma.mandate.findFirstOrThrow({
+      where: { personId: identifier.ownerId, kind: 'PARLIAMENTARY' },
+    })
+
+    expect(mandat.startDate).toEqual(new Date('2025-09-28T00:00:00Z'))
+    expect(mandat.takingOfficeDate).toEqual(new Date('2025-09-29T00:00:00Z'))
+  })
+
+  it("laisse la date de prise de fonction nulle quand la source ne la publie pas, sans perdre le mandat", async () => {
+    const run = await stageFixture('c1')
+
+    // Mandat parlementaire sans `datePriseFonction` : le cas se produit sur
+    // les législatures anciennes, et il ne doit ni faire échouer la
+    // normalisation ni se voir attribuer une date d'entrée en fonction
+    // inventée. C'est `gold.deputy_card` qui décide de retomber sur
+    // `start_date`, pas silver.
+    await prisma.anMandatRaw.create({
+      data: {
+        importRunId: run.id,
+        uid: 'PM_TEST_SANS_PRISE_FONCTION',
+        acteurRef: 'PA368',
+        typeOrgane: 'ASSEMBLEE',
+        legislature: '15',
+        dateDebut: '2017-06-21',
+        payload: {},
+      },
+    })
+
+    await normalizeAn(prisma, run)
+
+    const identifier = await prisma.externalIdentifier.findUniqueOrThrow({
+      where: { sourceId_kind_value: { sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA368' } },
+    })
+    const mandat = await prisma.mandate.findFirstOrThrow({
+      where: {
+        personId: identifier.ownerId,
+        kind: 'PARLIAMENTARY',
+        startDate: new Date('2017-06-21T00:00:00Z'),
+      },
+    })
+
+    expect(mandat.takingOfficeDate).toBeNull()
+    expect(mandat.startDate).toEqual(new Date('2017-06-21T00:00:00Z'))
+  })
+
+  it("retient la plus ancienne prise de fonction et le dernier état publié quand plusieurs mandats partagent la clé naturelle", async () => {
+    const run = await stageFixture('c1')
+
+    // Cas réel : un député élu aux générales, nommé au gouvernement, puis
+    // reprenant son mandat. L'AN publie deux mandats de même `dateDebut`, qui
+    // partagent donc la clé naturelle et se fondent en une seule ligne silver.
+    // La ligne fusionnée doit ouvrir sa fenêtre au plus tôt — sans quoi le
+    // premier passage à l'Assemblée disparaîtrait du dénominateur — et porter
+    // la fin du dernier mandat publié — sans quoi un député en exercice
+    // apparaîtrait comme sorti.
+    //
+    // Les deux lignes sont créées dans l'ordre « le plus récent d'abord »,
+    // exactement l'ordre qui produisait le mauvais résultat quand la lecture
+    // suivait l'ordre physique des lignes.
+    await prisma.anMandatRaw.createMany({
+      data: [
+        {
+          importRunId: run.id,
+          uid: 'PM_TEST_REPRISE',
+          acteurRef: 'PA368',
+          typeOrgane: 'ASSEMBLEE',
+          legislature: '15',
+          dateDebut: '2016-01-01',
+          datePriseFonction: '2016-09-01',
+          dateFin: null,
+          payload: {},
+        },
+        {
+          importRunId: run.id,
+          uid: 'PM_TEST_PREMIER_PASSAGE',
+          acteurRef: 'PA368',
+          typeOrgane: 'ASSEMBLEE',
+          legislature: '15',
+          dateDebut: '2016-01-01',
+          datePriseFonction: '2016-01-02',
+          dateFin: '2016-06-30',
+          causeFin: 'Nomination comme membre du Gouvernement',
+          payload: {},
+        },
+      ],
+    })
+
+    await normalizeAn(prisma, run)
+
+    const identifier = await prisma.externalIdentifier.findUniqueOrThrow({
+      where: { sourceId_kind_value: { sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA368' } },
+    })
+    const mandats = await prisma.mandate.findMany({
+      where: {
+        personId: identifier.ownerId,
+        kind: 'PARLIAMENTARY',
+        startDate: new Date('2016-01-01T00:00:00Z'),
+      },
+    })
+
+    // La clé naturelle n'est pas modifiée (spec §6.2) : une seule ligne.
+    expect(mandats).toHaveLength(1)
+    expect(mandats[0]?.takingOfficeDate).toEqual(new Date('2016-01-02T00:00:00Z'))
+    expect(mandats[0]?.endDate).toBeNull()
+  })
+
   it('crée les appartenances aux groupes et commissions', async () => {
     const run = await stageFixture('c1')
     await normalizeAn(prisma, run)

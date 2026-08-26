@@ -132,6 +132,11 @@ model AnMandatRaw {
   causeMandat        String? @map("cause_mandat")
   refCirconscription String? @map("ref_circonscription")
   causeFin           String? @map("cause_fin")
+  /// `mandature.datePriseFonction` : date à laquelle la personne est
+  /// effectivement entrée en fonction, distincte de `dateDebut` qui est la
+  /// date d'ouverture du mandat du siège. L'AN ne la publie que sur les
+  /// mandats `typeOrgane = ASSEMBLEE` (0 ligne sur 180 246 autres, mesuré).
+  datePriseFonction  String? @map("date_prise_fonction")
   payload            Json
 
   @@unique([importRunId, uid])
@@ -291,6 +296,13 @@ model Mandate {
   territoryId   String?      @map("territory_id")
   kind          String
   startDate     DateTime?    @map("start_date")
+  /// Date à laquelle la personne est effectivement entrée en fonction.
+  /// N'écrase jamais `startDate`, qui reste la date d'ouverture du mandat
+  /// publiée par la source : ce sont deux faits distincts, tous deux vrais.
+  /// Nulle quand la source ne la publie pas — la fenêtre de participation
+  /// retombe alors sur `startDate`. Voir la migration
+  /// 20260826200500_mandat_date_prise_fonction.
+  takingOfficeDate DateTime?  @map("taking_office_date")
   endDate       DateTime?    @map("end_date")
   endCause      String?      @map("end_cause")
   person        Person       @relation(fields: [personId], references: [id], onDelete: Cascade)

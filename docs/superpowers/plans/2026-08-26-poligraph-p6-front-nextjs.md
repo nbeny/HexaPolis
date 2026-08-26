@@ -1552,6 +1552,67 @@ même agrégation, sans parcours supplémentaire.
     et ce sont exactement les 3 que l'Assemblée nomme sur moins de 100
     scrutins.
 
+    *Corrigé le 26 août 2026 par les migrations
+    `20260826200500_mandat_date_prise_fonction` et
+    `20260826201500_gold_participation_prise_fonction`. La prémisse du constat
+    ci-dessus était fausse sur un point : la source publie bien une seconde
+    date. `silver.mandate.start_date` porte `dateDebut`, l'ouverture du mandat
+    **du siège** ; l'Assemblée publie aussi `mandature.datePriseFonction`, la
+    date à laquelle **cette personne** est entrée en fonction. PoliGraph
+    n'importait que la première. Mesuré en bronze : 4 531 mandats `ASSEMBLEE`
+    portent une `datePriseFonction`, dont 2 853 postérieures à `dateDebut`, et
+    aucune antérieure ; aucun des 180 246 mandats des autres types d'organe
+    n'en porte.*
+
+    *Correctif : la date rejoint bronze (`an_mandat_raw.date_prise_fonction`,
+    remplie depuis le `payload` déjà archivé — aucun téléchargement) et silver
+    (`mandate.taking_office_date`, colonne distincte qui n'écrase pas
+    `start_date` : les deux faits sont publiés et vrais). `gold.deputy_card`
+    ouvre l'intervalle de mandat à `COALESCE(taking_office_date, start_date)`.
+    La clé naturelle de `Mandate` n'est **pas** modifiée (§6.2 de la spec) ;
+    quand plusieurs mandats publiés la partagent, la normalisation retient la
+    plus ancienne `datePriseFonction`, calculée en un passage préalable, donc
+    indépendante de l'ordre de lecture.*
+
+    *Effet mesuré après réimport : 47 des 577 fiches ont un dénominateur
+    changé, aucune augmenté. Bernadeau passe de « 4 sur 8 434 — 0,05 % » à
+    « 4 sur 17 — 23,53 % », avec sa date d'entrée en fonction (2026-07-20)
+    affichée juste au-dessus. Chantal Bouloux (écart 3), entrée en fonction le
+    2026-08-05 après le dernier scrutin éligible, passe de « 8 434 scrutins
+    éligibles, numérateur introuvable » à une participation entièrement absente
+    — sa fiche s'explique enfin d'elle-même. Témoins inchangés, entrés en
+    fonction à l'ouverture : Braun-Pivet, Chenu et Corbière, 8 434 chacun.*
+
+    *La fiche affiche désormais « Entrée en fonction (mandat en cours) » juste
+    avant le dénominateur, sans badge « Calculé par PoliGraph » — c'est un fait
+    de source, pas un agrégat — et un troisième avertissement de section dit
+    que deux taux calculés sur des nombres de scrutins très différents ne se
+    comparent pas. Aucune phrase ne qualifie un député.*
+12. **Un mandat sur deux publiés disparaissait, et lequel dépendait de l'ordre
+    physique des lignes.** *Relevé et corrigé le 26 août 2026, en marge de
+    l'écart 11.* La clé naturelle de `Mandate`
+    (`personId::institutionId::kind::dateDebut`) est partagée par plusieurs
+    mandats publiés lorsqu'un député est nommé au gouvernement puis reprend son
+    siège : l'Assemblée publie deux mandats de même `dateDebut`. 120 groupes
+    sur les 4 531 mandats `ASSEMBLEE` du bronze, dont 27 sur la 17e législature
+    — 3 954 uid bronze pour 3 832 lignes silver. `normalize.ts` lisait le
+    bronze sans `ORDER BY`, si bien que le dernier upsert du groupe imposait
+    son `endDate` et que « le dernier » était l'ordre physique des lignes :
+    remplir une simple colonne a suffi à faire basculer 17 mandats d'un état à
+    l'autre. Conséquence : **10 députés en exercice étaient absents du site**,
+    portant la date de fin de leur premier passage. `gold.deputy_card`
+    comptait 567 lignes ; la source en déclare 577, le nombre de sièges.
+    *Correctif appliqué : l'ordre de lecture est imposé (`datePriseFonction`
+    croissante, `uid` en départage), donc le dernier état publié gagne et le
+    résultat ne dépend plus de la disposition des lignes. La vue compte
+    désormais 577 lignes.* **Non corrigé :** les deux mandats restent fondus en
+    une seule ligne, et l'intervalle publié est donc `[plus ancienne prise de
+    fonction, fin du dernier mandat]` — il recouvre la période passée au
+    gouvernement au lieu de deux intervalles disjoints, ce qui gonfle le
+    dénominateur de ces 27 députés. Les séparer exige d'ajouter la date de
+    prise de fonction à la clé naturelle, c'est-à-dire une migration de données
+    (§6.2), pas une correction de code.
+
 ---
 
 ## Critère d'achèvement

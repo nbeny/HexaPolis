@@ -177,7 +177,77 @@ export async function normalizeAn(
   }
 
   // --- Mandats
-  const mandats = await prisma.anMandatRaw.findMany({ where: { importRunId: run.id } })
+  //
+  // L'ordre de lecture est imposé, il ne peut pas être laissé au moteur.
+  // Plusieurs mandats publiés partagent parfois la même clé naturelle (voir
+  // `earliestTakingOffice` ci-dessous) : le dernier upsert du groupe écrase
+  // alors `endDate`, `endCause` et `territoryId` des précédents. Sans `orderBy`,
+  // ce « dernier » est l'ordre physique des lignes bronze, que n'importe quel
+  // UPDATE sur la table redistribue — un simple remplissage de colonne a suffi
+  // à faire basculer 17 mandats de la 17e législature d'un état à l'autre, et
+  // avec eux la présence de députés en exercice dans `gold.deputy_card`.
+  //
+  // Trier par date de prise de fonction croissante fait gagner le mandat le
+  // plus récemment pris : c'est le dernier état publié du siège, donc la seule
+  // `endDate` qui décrit la situation d'aujourd'hui. Un ancien ministre revenu
+  // siéger garde ainsi son mandat ouvert au lieu de porter la date de fin de
+  // son premier passage. `uid` départage à égalité de date, pour que deux
+  // exécutions sur le même bronze produisent le même silver.
+  const mandats = await prisma.anMandatRaw.findMany({
+    where: { importRunId: run.id },
+    orderBy: [{ datePriseFonction: { sort: 'asc', nulls: 'first' } }, { uid: 'asc' }],
+  })
+
+  /**
+   * Clé naturelle d'un mandat non-organe. Extraite pour que le passage
+   * préalable ci-dessous et l'upsert plus bas ne puissent pas diverger.
+   */
+  const mandateKey = (personId: string, kind: string, dateDebut: string | null): string =>
+    naturalKey(personId, institution.id, kind, dateDebut)
+
+  /**
+   * Date d'entrée en fonction la plus ancienne par clé naturelle de mandat.
+   *
+   * L'Assemblée publie parfois plusieurs mandats de même `dateDebut` pour une
+   * même personne — un député élu aux générales, nommé au gouvernement, puis
+   * reprenant son mandat en produit deux, tous deux ouverts au 2024-07-07 mais
+   * avec des `datePriseFonction` différentes. Ces mandats partagent donc la
+   * clé naturelle et se fondent déjà en une seule ligne silver : 120 groupes
+   * sur les 4 531 mandats ASSEMBLEE du bronze, dont 27 sur la 17e législature.
+   *
+   * La clé naturelle n'est délibérément pas modifiée pour les séparer : en
+   * changer la formule est une migration de données, pas une correction de
+   * code (spec §6.2, incident réel sur `BodyMembership`). Il faut donc choisir
+   * une valeur pour la ligne fusionnée, et ce passage préalable retient la
+   * plus ancienne :
+   *
+   * - c'est la seule qui ne retranche du dénominateur de participation aucune
+   *   période réellement exercée — retenir la plus récente effacerait le
+   *   premier passage à l'Assemblée d'un ancien ministre ;
+   * - elle ne dépend pas de l'ordre de lecture des lignes bronze, contrairement
+   *   au « dernier écrit gagne » qu'un simple upsert dans la boucle
+   *   produirait : le dénominateur serait alors différent d'un import à
+   *   l'autre sans qu'aucune donnée n'ait changé.
+   *
+   * Les dates AN sont au format `YYYY-MM-DD` (vérifié : longueur 10 sur les
+   * 4 531 valeurs publiées), dont l'ordre lexicographique est l'ordre
+   * chronologique.
+   */
+  const earliestTakingOffice = new Map<string, string>()
+  for (const mandat of mandats) {
+    if (!mandat.datePriseFonction) continue
+    const personId = acteurToPerson.get(mandat.acteurRef)
+    if (!personId) continue
+    const kind = mandateTypeFromTypeOrgane(mandat.typeOrgane)
+    if (!kind || kind === 'PARTY_AFFILIATION' || kind === 'BODY_MEMBERSHIP') continue
+
+    const key = mandateKey(personId, kind, mandat.dateDebut)
+    const known = earliestTakingOffice.get(key)
+    if (known === undefined || mandat.datePriseFonction < known) {
+      earliestTakingOffice.set(key, mandat.datePriseFonction)
+    }
+  }
+
   for (const mandat of mandats) {
     const personId = acteurToPerson.get(mandat.acteurRef)
     if (!personId) {
@@ -245,13 +315,32 @@ export async function normalizeAn(
       ? (organeToTerritory.get(mandat.refCirconscription) ?? null)
       : null
 
-    const key = naturalKey(personId, institution.id, kind, mandat.dateDebut)
+    const key = mandateKey(personId, kind, mandat.dateDebut)
+    // `startDate` porte `dateDebut` — l'ouverture du mandat du siège — et
+    // `takingOfficeDate` la date d'entrée en fonction de la personne. La
+    // seconde n'écrase pas la première : ce sont deux faits publiés, tous deux
+    // vrais, qui répondent à deux questions différentes. C'est la vue
+    // `gold.deputy_card` qui choisit laquelle ouvre la fenêtre de
+    // participation, et elle retombe explicitement sur `startDate` quand la
+    // source ne publie pas d'entrée en fonction.
+    //
+    // Écrite aussi dans `update` : sans cela, une renormalisation sur des
+    // mandats déjà écrits laisserait la colonne vide, puisque la clé naturelle
+    // est inchangée et que toutes les lignes existantes passent par cette
+    // branche. La valeur vient du passage préalable, jamais de `mandat`
+    // directement : voir `earliestTakingOffice`.
+    const takingOfficeDate = toDate(earliestTakingOffice.get(key) ?? null)
     // Comme pour BodyMembership, cet upsert réécrit endDate/endCause/territoryId
     // sur une ligne existante : « updated », jamais « unchanged ».
     const existingMandate = await prisma.mandate.findUnique({ where: { naturalKey: key } })
     const created = await prisma.mandate.upsert({
       where: { naturalKey: key },
-      update: { endDate: toDate(mandat.dateFin), endCause: mandat.causeFin, territoryId },
+      update: {
+        endDate: toDate(mandat.dateFin),
+        endCause: mandat.causeFin,
+        territoryId,
+        takingOfficeDate,
+      },
       create: {
         naturalKey: key,
         personId,
@@ -260,6 +349,7 @@ export async function normalizeAn(
         territoryId,
         kind,
         startDate: toDate(mandat.dateDebut),
+        takingOfficeDate,
         endDate: toDate(mandat.dateFin),
         endCause: mandat.causeFin,
       },

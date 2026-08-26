@@ -17,6 +17,7 @@ export const DEPUTY_QUERY = /* GraphQL */ `
       constituencyCode
       constituencyLabel
       departmentCode
+      takingOfficeDate
       currentGroupLabel
       currentGroupShortLabel
       currentGroupColor

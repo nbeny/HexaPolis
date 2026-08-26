@@ -54,6 +54,14 @@ interface DeputyVoteRow {
  *   éligible, un NON_VOTANT sur l'autre.
  * - Chloé arrive après les deux scrutins existants : aucun scrutin éligible
  *   ne tombe dans son mandat, sa participation doit rester NULL, jamais 0.
+ * - Hugo est le cas de l'écart 11 : l'Assemblée ouvre son mandat à
+ *   l'ouverture de la législature (`startDate`, comme Alice et Bob) mais
+ *   publie une date d'entrée en fonction postérieure aux scrutins A et B —
+ *   il remplace un député en mission. Seul le scrutin C, tenu après son
+ *   arrivée, peut entrer à son dénominateur. Sur les données réelles c'était
+ *   Marie-Sophie Bernadeau (PA793924), entrée en fonction le 2026-07-20 et
+ *   mesurée contre les 8 434 scrutins de deux ans de législature : « 4 sur
+ *   8 434 — 0,05 % ».
  * - Élise siège depuis le début de la législature — le scrutin A, éligible,
  *   tombe donc dans son mandat — mais la source ne la nomme sur aucun
  *   scrutin : elle n'a aucune position enregistrée. Dénominateur connu,
@@ -73,6 +81,7 @@ async function seed(): Promise<{
   elise: string
   fabienne: string
   gaspard: string
+  hugo: string
   ballotA: string
   ballotB: string
   ballotC: string
@@ -149,6 +158,14 @@ async function seed(): Promise<{
       matchKey: 'gaspard|mixte',
     },
   })
+  const hugo = await prisma.person.create({
+    data: {
+      displayName: 'Hugo Remplaçant',
+      firstName: 'Hugo',
+      lastName: 'Remplaçant',
+      matchKey: 'hugo|remplacant',
+    },
+  })
 
   // Alice et Bob siègent depuis le début de la législature.
   await prisma.mandate.create({
@@ -222,6 +239,26 @@ async function seed(): Promise<{
       },
     })
   }
+  // Hugo remplace un député en mission. L'Assemblée ouvre son mandat à la
+  // date d'ouverture de la législature, comme celui d'Alice et de Bob, mais
+  // publie une date d'entrée en fonction postérieure : il n'est en fonction
+  // que depuis le 11 juillet. Les scrutins A (10 juillet) et B (11 juillet,
+  // non éligible) ne peuvent pas entrer à son dénominateur ; seul le scrutin C
+  // (12 juillet) le peut. `startDate` reste `2022-06-22` : les deux dates sont
+  // publiées, la seconde n'écrase pas la première.
+  await prisma.mandate.create({
+    data: {
+      naturalKey: 'mandate-hugo',
+      personId: hugo.id,
+      institutionId: institution.id,
+      legislatureId: legislature17.id,
+      territoryId: territory.id,
+      kind: 'PARLIAMENTARY',
+      startDate: new Date('2022-06-22T00:00:00Z'),
+      takingOfficeDate: new Date('2022-07-11T00:00:00Z'),
+      endDate: null,
+    },
+  })
   // David a quitté son mandat : nommé au gouvernement, remplacé.
   await prisma.mandate.create({
     data: {
@@ -371,6 +408,20 @@ async function seed(): Promise<{
     },
   })
 
+  // Hugo n'a de position que sur le scrutin C, le seul tenu après son entrée
+  // en fonction. Aucune sur A : l'Assemblée ne nomme pas un député sur un
+  // scrutin antérieur à son arrivée, et lui en créer une ici fabriquerait un
+  // fait que la source ne publie jamais.
+  await prisma.ballotPosition.create({
+    data: {
+      naturalKey: 'position-hugo-c',
+      ballotId: ballotC.id,
+      personId: hugo.id,
+      position: 'POUR',
+      bodyIdAtVote: group.id,
+    },
+  })
+
   // Scrutin B : seul Bob, dissident, y est nommé — c'est le mode de publication
   // qui explique l'absence d'Alice, pas une absence réelle.
   await prisma.ballotPosition.create({
@@ -391,6 +442,7 @@ async function seed(): Promise<{
     elise: elise.id,
     fabienne: fabienne.id,
     gaspard: gaspard.id,
+    hugo: hugo.id,
     ballotA: ballotA.id,
     ballotB: ballotB.id,
     ballotC: ballotC.id,
@@ -452,11 +504,12 @@ describe('refreshGold', () => {
     }
     const card = results.find((r) => r.view === 'gold.deputy_card')
     const vote = results.find((r) => r.view === 'gold.deputy_vote')
-    // Alice, Bob, Chloé, Élise, Fabienne, Gaspard : 6 députés en exercice.
-    // David a quitté son mandat.
-    expect(card?.rows).toBe(6)
-    // Alice (2) + Bob (2) + Chloé (0) + Élise (0) + Fabienne (2) + Gaspard (2) = 8.
-    expect(vote?.rows).toBe(8)
+    // Alice, Bob, Chloé, Élise, Fabienne, Gaspard, Hugo : 7 députés en
+    // exercice. David a quitté son mandat.
+    expect(card?.rows).toBe(7)
+    // Alice (2) + Bob (2) + Chloé (0) + Élise (0) + Fabienne (2) + Gaspard (2)
+    // + Hugo (1) = 9.
+    expect(vote?.rows).toBe(9)
   })
 
   it('place un député en exercice dans deputy_card avec ses agrégats', async () => {
@@ -648,6 +701,63 @@ describe('refreshGold', () => {
         )
     `
     expect(Number(debordements?.n)).toBe(0)
+  })
+
+  it("ouvre le dénominateur à la date d'entrée en fonction, pas à la date de début du mandat", async () => {
+    const { hugo } = await seed()
+    await refreshGold(prisma)
+
+    const card = await cardFor(hugo)
+    expect(card).toBeDefined()
+    // C'est l'assertion qui aurait fait échouer l'écart 11. Le mandat de Hugo
+    // démarre le 22 juin, avant les scrutins A (10 juillet) et C (12 juillet) :
+    // l'ancienne vue lui comptait donc 2 scrutins éligibles. Il n'est en
+    // fonction que depuis le 11 juillet, seul C peut entrer au dénominateur.
+    expect(card?.participation_ballot_count).toBe(1)
+    expect(card?.participation_named_count).toBe(1)
+    expect(card?.participation_expressed_count).toBe(1)
+    expect(card?.participation_non_voting_count).toBe(0)
+    expect(Number(card?.participation_expressed_rate)).toBeCloseTo(1)
+    // Le taux vaut 100 %, sur un seul scrutin. C'est arithmétiquement exact et
+    // ce n'est pas comparable au 100 % d'Alice, calculé sur deux : la date
+    // d'entrée en fonction remonte jusqu'à la vue pour que la fiche puisse
+    // l'afficher à côté du dénominateur.
+    expect(card?.taking_office_date).toEqual(new Date('2022-07-11T00:00:00Z'))
+  })
+
+  it("continue d'ouvrir le dénominateur à la date de début quand la source ne publie pas d'entrée en fonction", async () => {
+    const { alice } = await seed()
+    await refreshGold(prisma)
+
+    const card = await cardFor(alice)
+    // Alice n'a pas de `takingOfficeDate` : la vue retombe sur `start_date`
+    // (22 juin), et les deux scrutins éligibles restent au dénominateur. La
+    // retombée est un COALESCE explicite, jamais une date inventée — la
+    // colonne reste nulle jusque dans la vue.
+    expect(card?.taking_office_date).toBeNull()
+    expect(card?.participation_ballot_count).toBe(2)
+  })
+
+  it("laisse toute la participation à NULL pour un député entré en fonction après le dernier scrutin éligible", async () => {
+    const { hugo } = await seed()
+    // Cas réel de Chantal Bouloux (PA793528), entrée en fonction le
+    // 2026-08-05, après le dernier scrutin publié en décompte nominatif.
+    // Avant l'écart 11, sa fiche affichait « 8 434 scrutins éligibles » et un
+    // numérateur introuvable ; le dénominateur lui-même n'existe pas.
+    await prisma.mandate.update({
+      where: { naturalKey: 'mandate-hugo' },
+      data: { takingOfficeDate: new Date('2022-09-01T00:00:00Z') },
+    })
+    await refreshGold(prisma)
+
+    const card = await cardFor(hugo)
+    expect(card).toBeDefined()
+    expect(card?.participation_ballot_count).toBeNull()
+    // Règle de 20260826150500 préservée : rien ne retombe à zéro.
+    expect(card?.participation_named_count).toBeNull()
+    expect(card?.participation_expressed_count).toBeNull()
+    expect(card?.participation_non_voting_count).toBeNull()
+    expect(card?.participation_expressed_rate).toBeNull()
   })
 
   it("exclut un ancien député (mandat terminé) des deux vues gold, même s'il a des positions de vote enregistrées", async () => {

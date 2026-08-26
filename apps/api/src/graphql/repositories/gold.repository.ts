@@ -15,6 +15,7 @@ interface DeputyCardRawRow {
   constituency_code: string | null
   constituency_label: string | null
   department_code: string | null
+  taking_office_date: Date | null
   current_group_id: string | null
   current_group_label: string | null
   current_group_short_label: string | null
@@ -42,6 +43,7 @@ export interface DeputyCard {
   constituencyCode: string | null
   constituencyLabel: string | null
   departmentCode: string | null
+  takingOfficeDate: Date | null
   currentGroupId: string | null
   currentGroupLabel: string | null
   currentGroupShortLabel: string | null
@@ -70,6 +72,7 @@ function mapCard(row: DeputyCardRawRow): DeputyCard {
     constituencyCode: row.constituency_code,
     constituencyLabel: row.constituency_label,
     departmentCode: row.department_code,
+    takingOfficeDate: row.taking_office_date,
     currentGroupId: row.current_group_id,
     currentGroupLabel: row.current_group_label,
     currentGroupShortLabel: row.current_group_short_label,

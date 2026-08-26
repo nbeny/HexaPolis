@@ -91,6 +91,11 @@ export async function seedFiche(prisma: PrismaClient): Promise<SeededFiche> {
       territoryId: territory.id,
       kind: 'PARLIAMENTARY',
       startDate: new Date('2022-06-22T00:00:00Z'),
+      // Distincte de `startDate`, comme l'AN les publie, mais antérieure aux
+      // trois scrutins de la fixture (10, 11 et 12 juillet) : le champ
+      // remonte jusqu'à la fiche sans déplacer aucun décompte, ce que le
+      // resserrement de la fenêtre est testé ailleurs (gold-refresh).
+      takingOfficeDate: new Date('2022-06-23T00:00:00Z'),
       endDate: null,
     },
   })

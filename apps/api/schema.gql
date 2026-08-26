@@ -93,6 +93,7 @@ type Deputy {
   mandates: [Mandate!]!
   slug: String!
   sources: [SourceRef!]!
+  takingOfficeDate: DateTime
   votingSummary(legislature: Int): VotingSummary!
 }
 

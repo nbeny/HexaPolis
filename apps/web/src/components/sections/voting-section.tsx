@@ -112,7 +112,7 @@ function participationAbsence(summary: VotingSummary): {
  * ne publie pas de motif, PoliGraph n'en invente pas, et aucun député ne reçoit
  * de traitement particulier — les décomptes sont rendus tels quels.
  */
-function summaryFacts(summary: VotingSummary): Fact[] {
+function summaryFacts(summary: VotingSummary, takingOfficeDate: string | null): Fact[] {
   const computed = summary.status === 'COMPUTED'
   const badge = computed ? <ComputedBadge /> : undefined
   const absence = participationAbsence(summary)
@@ -127,6 +127,20 @@ function summaryFacts(summary: VotingSummary): Fact[] {
       label: 'Positions enregistrées (17e législature)',
       value: formatInteger(summary.voteCount),
       badge,
+    },
+    {
+      // Placée juste avant le dénominateur, parce que c'est elle qui l'explique.
+      // Sans elle, « 17 scrutins éligibles » et « 8 434 scrutins éligibles »
+      // s'affichent sous le même libellé, et les taux qui en sortent se
+      // comparent comme s'ils portaient la même chose.
+      //
+      // Pas de badge « Calculé par PoliGraph » : cette date est publiée par
+      // l'Assemblée nationale (`mandature.datePriseFonction`), elle n'est pas
+      // un agrégat. Les lignes suivantes, elles, en portent un.
+      label: 'Entrée en fonction (mandat en cours)',
+      value: formatDate(takingOfficeDate),
+      absentWhy:
+        "L'Assemblée nationale ne publie pas de date d'entrée en fonction pour le mandat en cours de ce député. Le décompte ci-dessous s'ouvre alors à la date de début de mandat, indiquée dans la section « Mandats ».",
     },
     {
       label: 'Scrutins éligibles au calcul (17e législature)',
@@ -182,15 +196,23 @@ function summaryFacts(summary: VotingSummary): Fact[] {
 export function VotingSection({
   summary,
   positions,
+  takingOfficeDate,
   sources,
 }: {
   summary: VotingSummary
   positions: BallotPositions
+  /**
+   * `Deputy.takingOfficeDate` : date d'entrée en fonction publiée par
+   * l'Assemblée pour le mandat en cours. Passée ici, et non lue dans
+   * `summary`, parce que ce n'est pas un agrégat — voir le champ dans
+   * `deputy.model.ts`.
+   */
+  takingOfficeDate: string | null
   sources: SectionSource[]
 }) {
   return (
     <SectionCard title="Activité de vote" sources={sources}>
-      <FactList facts={summaryFacts(summary)} />
+      <FactList facts={summaryFacts(summary, takingOfficeDate)} />
 
       {/*
         Avertissements obligatoires, pas décoratifs. Le premier empêche de lire
@@ -218,6 +240,25 @@ export function VotingSection({
         particulier à aucun député : le décompte est rendu tel quel. C&apos;est aussi pourquoi le
         taux ci-dessus n&apos;est jamais affiché seul — il ne dit pas, à lui seul, ce qui le rend
         haut ou bas.
+      </p>
+
+      {/*
+        Troisième avertissement, ajouté avec l'entrée en fonction. Les deux
+        précédents empêchent de mal lire le numérateur ; celui-ci empêche de
+        mal lire le dénominateur, et surtout de comparer deux taux qui ne
+        reposent pas sur le même nombre de scrutins. Il énonce une règle de
+        lecture valable pour les 577 fiches, sans qualifier aucun député : les
+        dates et les décomptes sont ceux que la source publie.
+      */}
+      <p className="mt-2 rounded border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+        Le décompte des scrutins éligibles s&apos;ouvre à la date d&apos;entrée en fonction
+        ci-dessus, et non à l&apos;ouverture de la législature : un député qui remplace un
+        collègue nommé au gouvernement ou en mission ne pouvait pas voter les scrutins tenus
+        avant son arrivée, et les compter contre lui produirait un taux proche de zéro. En
+        contrepartie, un taux calculé sur quelques dizaines de scrutins et un taux calculé sur
+        plusieurs milliers ne se comparent pas : le pourcentage seul ne dit pas combien de
+        scrutins il résume, c&apos;est pourquoi le nombre de scrutins éligibles est affiché à
+        côté de lui et jamais séparé.
       </p>
 
       <h3 className="mt-5 text-sm font-medium text-stone-900">

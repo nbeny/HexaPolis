@@ -24,7 +24,10 @@ interface MandatNode {
     causeMandat?: unknown
     refCirconscription?: unknown
   }
-  mandature?: { causeFin?: unknown }
+  // `datePriseFonction` est la date d'entrée en fonction de la personne ;
+  // `dateDebut`, plus haut, est celle d'ouverture du mandat du siège. Les deux
+  // sont publiées et différentes pour tout remplaçant (2 853 mandats mesurés).
+  mandature?: { causeFin?: unknown; datePriseFonction?: unknown }
 }
 
 interface ActeurNode {
@@ -132,6 +135,7 @@ export async function stageActeurs(
           causeMandat: rawString(mandat.election?.causeMandat),
           refCirconscription: rawString(mandat.election?.refCirconscription),
           causeFin: rawString(mandat.mandature?.causeFin),
+          datePriseFonction: rawString(mandat.mandature?.datePriseFonction),
           payload: mandat as object,
         },
       })
