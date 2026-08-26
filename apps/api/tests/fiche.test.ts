@@ -33,7 +33,7 @@ describe('deputy(slug) — fiche complète', () => {
           groupMemberships { bodyLabel }
           committees { bodyLabel }
           votingSummary { status mandateCount committeeCount voteCount participationRate }
-          candidacies { electionLabel account { declaredExpenses declaredIncome } }
+          candidacies { electionLabel round votes votePctRegistered votePctExpressed elected account { declaredExpenses declaredIncome } }
           sources { sourceId label }
         }
       }
@@ -59,10 +59,33 @@ describe('deputy(slug) — fiche complète', () => {
     expect(deputy.votingSummary.mandateCount).toBe(2)
     expect(deputy.votingSummary.voteCount).toBe(3) // 3 scrutins de la 17e, Alice y vote tous.
 
+    // Deux candidatures, triées par année d'élection décroissante : 2024
+    // (DATA_GOUV, résultats officiels) puis 2022 (CNCCFP, compte de campagne).
+    expect(deputy.candidacies).toHaveLength(2)
+    const [c2024, c2022] = deputy.candidacies
+
+    // Résultats électoraux : voix et pourcentages présents, recopiés tels
+    // quels — jamais recalculés depuis les voix (point 2 de la consigne).
+    expect(c2024.electionLabel).toBe('Élections législatives 2024')
+    expect(c2024.round).toBe(2)
+    expect(c2024.votes).toBe(33889)
+    expect(c2024.votePctRegistered).toBeCloseTo(39.02)
+    expect(c2024.votePctExpressed).toBeCloseTo(56.48)
+    expect(c2024.elected).toBe(true)
+    expect(c2024.account).toBeNull()
+
     // Financement : compte rapproché, montants réels.
-    expect(deputy.candidacies).toHaveLength(1)
-    expect(deputy.candidacies[0].account.declaredExpenses).toBe(1000)
-    expect(deputy.candidacies[0].account.declaredIncome).toBe(1200)
+    expect(c2022.electionLabel).toBe('Élections législatives 2022')
+    expect(c2022.account.declaredExpenses).toBe(1000)
+    expect(c2022.account.declaredIncome).toBe(1200)
+
+    // Absence explicite, jamais un zéro : cette candidature CNCCFP n'a ni
+    // tour ni voix ; `elected`, lui, n'est jamais `null` (défaut à `false`).
+    expect(c2022.round).toBeNull()
+    expect(c2022.votes).toBeNull()
+    expect(c2022.votePctRegistered).toBeNull()
+    expect(c2022.votePctExpressed).toBeNull()
+    expect(c2022.elected).toBe(false)
 
     // Sources : la chaîne provenance → import_run → dataset_resource → dataset → source.
     expect(deputy.sources).toEqual([{ sourceId: 'AN', label: 'Assemblée nationale' }])

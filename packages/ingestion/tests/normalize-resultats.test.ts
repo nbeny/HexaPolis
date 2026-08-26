@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { districtCodeFromCirconscription, normalizeResultats } from '../src/adapters/resultats/normalize-resultats.js'
 import { stageResultats } from '../src/adapters/resultats/stage-resultats.js'
 import { openImportRun } from '../src/run/import-run.js'
@@ -144,11 +144,29 @@ async function ecrireCsvUnBlocParLigne(path: string, rows: string[][]): Promise<
   await writeFile(path, lines.join('\n') + '\n', 'utf-8')
 }
 
+// La plupart des tests de ce fichier tournent sur des fixtures réduites, pas
+// sur les fichiers réels : ils doivent rester indépendants du contenu réel de
+// `data/identity-decisions.yaml` (chemin par défaut de `normalizeResultats`),
+// qui porte désormais de vraies décisions pour le 2nd tour (plan 5, tâche 4)
+// absentes de ces fixtures. Sans ce chemin isolé, ces décisions viseraient
+// des sourceKey introuvables dans la fixture et feraient échouer
+// `assertDecisionsAreResolvable` — un couplage accidentel avec le fichier de
+// production, pas une vraie régression.
+let emptyDecisionsDir: string
+let EMPTY_DECISIONS_PATH: string
+
+beforeAll(async () => {
+  emptyDecisionsDir = await mkdtemp(join(tmpdir(), 'poligraph-resultats-empty-decisions-'))
+  EMPTY_DECISIONS_PATH = join(emptyDecisionsDir, 'decisions.yaml')
+  await writeFile(EMPTY_DECISIONS_PATH, 'decisions: []\n', 'utf-8')
+})
+
 beforeEach(async () => {
   await resetDatabase(prisma)
 })
 
 afterAll(async () => {
+  await rm(emptyDecisionsDir, { recursive: true, force: true })
   await prisma.$disconnect()
 })
 
@@ -165,12 +183,21 @@ describe('districtCodeFromCirconscription', () => {
   it('ne complète pas un code déjà à deux chiffres ou plus (ex. 6908 -> 69-8)', () => {
     expect(districtCodeFromCirconscription('6908')).toBe('69-8')
   })
+
+  it('convertit le code département alphabétique ZZ (Français établis hors de France) en 099', () => {
+    expect(districtCodeFromCirconscription('ZZ01')).toBe('099-1')
+    expect(districtCodeFromCirconscription('ZZ11')).toBe('099-11')
+  })
+
+  it('convertit le code département alphabétique ZX (Saint-Barthélemy et Saint-Martin) en 977', () => {
+    expect(districtCodeFromCirconscription('ZX01')).toBe('977-1')
+  })
 })
 
 describe('normalizeResultats — dépivotage et faits électoraux', () => {
   it('crée une Candidacy par candidat exploitable : 28 pour la fixture du 1er tour', async () => {
     const run = await stageT1('t1-c1')
-    const report = await normalizeResultats(prisma, run)
+    const report = await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.candidacy.count()).toBe(28)
     expect(report.rejected).toBe(0)
@@ -178,7 +205,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
 
   it('crée l’élection 2024, portée par toutes les candidatures créées', async () => {
     const run = await stageT1('t1-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.election.count()).toBe(1)
     const election = await prisma.election.findFirstOrThrow()
@@ -190,7 +217,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
 
   it('elected est true uniquement pour le vainqueur marqué, jamais null : circo 901, élue au bloc 4', async () => {
     const run = await stageT1('t1-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const froger = await prisma.candidacy.findFirstOrThrow({ where: { displayName: 'Martine FROGER' } })
     expect(froger.elected).toBe(true)
@@ -207,7 +234,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
 
   it('76 élus au premier tour... vérifié ici sur la fixture réduite : exactement 2 élus (205 et 901)', async () => {
     const run = await stageT1('t1-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const elus = await prisma.candidacy.findMany({ where: { elected: true } })
     expect(elus).toHaveLength(2)
@@ -215,7 +242,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
 
   it('les voix et pourcentages sont convertis à la normalisation, pas au staging : Xavier Breton, 33889 voix', async () => {
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const breton = await prisma.candidacy.findFirstOrThrow({ where: { displayName: 'Xavier BRETON' } })
     expect(breton.votes).toBe(33889)
@@ -229,7 +256,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
   it('rattache le territoire à la candidature quand la circonscription se résout, y compris via la forme courte du 1er tour (901 -> 09-1)', async () => {
     await seedTerritory('09-1', "1ère circonscription de l'Ariège")
     const run = await stageT1('t1-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const froger = await prisma.candidacy.findFirstOrThrow({ where: { displayName: 'Martine FROGER' } })
     const territory = await prisma.territory.findUniqueOrThrow({ where: { type_code: { type: 'CIRCONSCRIPTION', code: '09-1' } } })
@@ -239,7 +266,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
   it('la forme longue du 2nd tour (0101) résout le même territoire que la forme courte du 1er tour (101) résoudrait', async () => {
     await seedTerritory('01-1', "1ère circonscription de l'Ain")
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const breton = await prisma.candidacy.findFirstOrThrow({ where: { displayName: 'Xavier BRETON' } })
     const territory = await prisma.territory.findUniqueOrThrow({ where: { type_code: { type: 'CIRCONSCRIPTION', code: '01-1' } } })
@@ -251,7 +278,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
     await seedTerritory('01-3', "3ème circonscription de l'Ain")
     await seedTerritory('69-8', 'Rhône 8')
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.electionTurnout.count()).toBe(3)
     const territory = await prisma.territory.findUniqueOrThrow({ where: { type_code: { type: 'CIRCONSCRIPTION', code: '01-1' } } })
@@ -267,15 +294,15 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
     await seedTerritory('01-3', "3ème circonscription de l'Ain")
     await seedTerritory('69-8', 'Rhône 8')
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.electionTurnout.count()).toBe(3)
   })
 
   it('est idempotent : rejouer la normalisation ne crée rien de plus', async () => {
     const run = await stageT1('t1-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const before = {
       candidacy: await prisma.candidacy.count(),
@@ -283,7 +310,7 @@ describe('normalizeResultats — dépivotage et faits électoraux', () => {
       identityMatch: await prisma.identityMatch.count(),
     }
 
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.candidacy.count()).toBe(before.candidacy)
     expect(await prisma.election.count()).toBe(before.election)
@@ -295,7 +322,7 @@ describe('normalizeResultats — résolution d’identité', () => {
   it('un candidat élu dont la personne est connue (mandat post-élection, seul homonyme du fichier) résout CONFIRMED et sa candidature est rattachée', async () => {
     const bretonId = await seedXavierBretonAvecMandat('2024-07-07')
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const match = await prisma.identityMatch.findFirstOrThrow({
       where: { sourceId: 'DATA_GOUV', sourceKey: { contains: 'breton' } },
@@ -312,10 +339,59 @@ describe('normalizeResultats — résolution d’identité', () => {
   it('un mandat antérieur à l’élection ne corrobore pas : non rattaché', async () => {
     await seedXavierBretonAvecMandat('2017-06-21')
     const run = await stageT2('t2-c1')
-    await normalizeResultats(prisma, run)
+    await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
     const candidacy = await prisma.candidacy.findFirstOrThrow({ where: { displayName: 'Xavier BRETON' } })
     expect(candidacy.personId).toBeNull()
+  })
+
+  it("une décision visant le 2nd tour ne fait pas échouer la normalisation du 1er tour (les deux tours partagent le sourceId DATA_GOUV mais sont des runs distincts)", async () => {
+    const person = await prisma.person.create({
+      data: {
+        displayName: 'Xavier Breton',
+        firstName: 'Xavier',
+        lastName: 'Breton',
+        matchKey: 'xavier|breton',
+        birthDate: null,
+      },
+    })
+    await prisma.externalIdentifier.create({
+      data: { ownerType: 'Person', ownerId: person.id, sourceId: 'AN', kind: 'ACTEUR_UID', value: 'PA900001' },
+    })
+
+    const dir = await mkdtemp(join(tmpdir(), 'poligraph-resultats-decision-2e-tour-'))
+    const decisionsPath = join(dir, 'decisions.yaml')
+    try {
+      await writeFile(
+        decisionsPath,
+        `decisions:
+  - decision: MERGE
+    left:  { source: DATA_GOUV, key: "2|01-1|3|xavier|breton" }
+    right: { source: AN, key: "PA900001" }
+    reason: "test : la clé ne figure que dans le fichier du 2nd tour"
+    decidedOn: 2026-08-26
+`,
+        'utf-8',
+      )
+
+      // Le 1er tour ne connaît pas cette sourceKey (préfixée "2|") : la
+      // normalisation ne doit pas lever d'erreur pour autant.
+      const runT1 = await stageT1('t1-decision-round-scope')
+      await expect(normalizeResultats(prisma, runT1, decisionsPath)).resolves.toBeDefined()
+
+      // Le 2nd tour, lui, la connaît : la décision s'y applique normalement.
+      const runT2 = await stageT2('t2-decision-round-scope')
+      await normalizeResultats(prisma, runT2, decisionsPath)
+
+      const match = await prisma.identityMatch.findFirstOrThrow({
+        where: { sourceId: 'DATA_GOUV', sourceKey: '2|01-1|3|xavier|breton' },
+      })
+      expect(match.personId).toBe(person.id)
+      expect(match.confidence).toBe('CONFIRMED')
+      expect(match.decidedBy).toBe('HUMAN')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it("l'unicité par circonscription se calcule sur l'ensemble du fichier : un homonyme placé loin derrière défait le premier candidat", async () => {
@@ -366,7 +442,7 @@ describe('normalizeResultats — résolution d’identité', () => {
       const run = await openImportRun(prisma, homonymeDescriptor, 'homonyme-tardif')
       if (!run) throw new Error('run attendu')
       await stageResultats(prisma, path, run)
-      await normalizeResultats(prisma, run)
+      await normalizeResultats(prisma, run, EMPTY_DECISIONS_PATH)
 
       const dupontCandidacies = await prisma.candidacy.findMany({ where: { displayName: 'Jean DUPONT' } })
       expect(dupontCandidacies).toHaveLength(2)

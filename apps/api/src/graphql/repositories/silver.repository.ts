@@ -47,6 +47,11 @@ export interface CandidacyRow {
   partyName: string | null
   nuance: string | null
   displayName: string
+  round: number | null
+  votes: number | null
+  votePctRegistered: number | null
+  votePctExpressed: number | null
+  elected: boolean
   account: CampaignAccountRow | null
 }
 
@@ -133,6 +138,11 @@ export class SilverRepository {
       partyName: c.party?.name ?? null,
       nuance: c.nuance,
       displayName: c.displayName,
+      round: c.round,
+      votes: c.votes,
+      votePctRegistered: toNumber(c.votePctRegistered),
+      votePctExpressed: toNumber(c.votePctExpressed),
+      elected: c.elected,
       account: c.account
         ? {
             currency: c.account.currency,

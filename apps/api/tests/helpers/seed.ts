@@ -12,9 +12,10 @@ const DESCRIPTOR: ResourceDescriptor = {
 }
 
 export interface SeededFiche {
-  /** Alice a un mandat ouvert, un historique de deux législatures, un
-   * compte de campagne rapproché et de la provenance jusqu'au bronze — le
-   * cas « fiche complète ». */
+  /** Alice a un mandat ouvert, un historique de deux législatures, deux
+   * candidatures (2022 CNCCFP avec compte de campagne rapproché mais sans
+   * résultat électoral, 2024 DATA_GOUV avec voix et pourcentages mais sans
+   * compte) et de la provenance jusqu'au bronze — le cas « fiche complète ». */
   alice: { id: string; anId: string; slug: string }
   /** Bob a un mandat ouvert mais aucune candidature rattachée — le cas
    * « financement absent », à ne jamais confondre avec un montant à 0. */
@@ -228,6 +229,35 @@ export async function seedFiche(prisma: PrismaClient): Promise<SeededFiche> {
       declaredExpenses: '1000.00',
       declaredIncome: '1200.00',
       declaredDonations: '50.00',
+    },
+  })
+
+  // Une seconde candidature (2024, DATA_GOUV), avec résultats officiels —
+  // pour distinguer, côté test GraphQL, une candidature que cette source a
+  // décrite (voix et pourcentages présents) d'une candidature CNCCFP qui ne
+  // l'a pas (round/votes/pourcentages restant `null`, jamais `0`).
+  const election2024 = await prisma.election.create({
+    data: {
+      naturalKey: 'legislatives-2024',
+      type: 'LEGISLATIVE',
+      label: 'Élections législatives 2024',
+      year: 2024,
+      secondRoundDate: new Date('2024-07-07T00:00:00Z'),
+    },
+  })
+  await prisma.candidacy.create({
+    data: {
+      naturalKey: 'legislatives-2024|2|01-1|1|alice|dupont',
+      electionId: election2024.id,
+      personId: alice.id,
+      territoryId: territory.id,
+      displayName: 'Alice DUPONT',
+      nuance: 'ECO',
+      round: 2,
+      votes: 33889,
+      votePctRegistered: '39.02',
+      votePctExpressed: '56.48',
+      elected: true,
     },
   })
 

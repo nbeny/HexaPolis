@@ -6,4 +6,99 @@
 # MERGE : les deux enregistrements désignent la même personne.
 # SPLIT : ils désignent des personnes différentes, malgré ce que suggère
 #         l'algorithme. Sert à verrouiller un cas d'homonymie réel.
-decisions: []
+#
+# Premier usage réel (plan 5, tâche 4) : six élus du second tour des
+# législatives 2024 que le ministère de l'Intérieur (DATA_GOUV) publie sous
+# une forme de nom différente de celle enregistrée par l'Assemblée nationale
+# (AN). Dans chaque cas, la circonscription désignée par le résultat
+# électoral n'a qu'un seul titulaire de mandat parlementaire sous la 17e
+# législature, vérifié avant d'écrire la décision (voir la requête dans le
+# plan 5, tâche 4) — c'est cette vérification, et non le nom seul, qui motive
+# le rapprochement.
+decisions:
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|04-2|2|sophie|vaginay"
+    right:
+      source: "AN"
+      key: "PA840657"
+    reason: >-
+      Nom d'usage publié par le ministère sans le patronyme composé
+      (« Ricourt ») porté par l'Assemblée nationale ; seule titulaire d'un
+      mandat parlementaire de la 2e circonscription des Alpes-de-Haute-Provence
+      (04-2) sous la 17e législature, depuis le 2024-07-07 — date du second
+      tour où elle a été élue.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|13-16|5|emmanuel|tache de la pagerie"
+    right:
+      source: "AN"
+      key: "PA793382"
+    reason: >-
+      Nom complet publié par le ministère (« Taché de la Pagerie ») là où
+      l'Assemblée nationale l'enregistre sous sa forme réduite (« Taché ») ;
+      seul titulaire d'un mandat parlementaire de la 16e circonscription des
+      Bouches-du-Rhône (13-16) sous la 17e législature, depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|53-3|3|yannick|favennec"
+    right:
+      source: "AN"
+      key: "PA267042"
+    reason: >-
+      Nom d'usage publié par le ministère sans le patronyme composé
+      (« Bécot ») porté par l'Assemblée nationale ; seul titulaire d'un
+      mandat parlementaire de la 3e circonscription de la Mayenne (53-3) sous
+      la 17e législature, depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|78-8|7|benjamin|lucas"
+    right:
+      source: "AN"
+      key: "PA795636"
+    reason: >-
+      Nom d'usage publié par le ministère sans le patronyme composé
+      (« Lundy ») porté par l'Assemblée nationale ; seul titulaire d'un
+      mandat parlementaire de la 8e circonscription des Yvelines (78-8) sous
+      la 17e législature, depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|974-4|2|emeline|kbidi"
+    right:
+      source: "AN"
+      key: "PA795998"
+    reason: >-
+      Nom publié sans la barre oblique du patronyme (« K/Bidi » devient
+      « Kbidi » côté ministère) — l'effet inverse du correctif du plan 1, qui
+      traite la barre oblique comme séparateur et produit « k bidi » côté AN ;
+      seule titulaire d'un mandat parlementaire de la 4e circonscription de
+      La Réunion (974-4) sous la 17e législature, depuis le 2024-07-07.
+    decidedOn: "2026-08-26"
+
+  - decision: MERGE
+    left:
+      source: "DATA_GOUV"
+      key: "2|987-3|3|mereana|reid aberlot"
+    right:
+      source: "AN"
+      key: "PA795240"
+    reason: >-
+      Transposition de deux lettres dans le second patronyme publié par le
+      ministère (« Aberlot » pour « Arbelot » côté Assemblée nationale) ;
+      seule titulaire d'un mandat parlementaire de la 3e circonscription de
+      Polynésie française (987-3) sous la 17e législature, depuis le
+      2024-07-07.
+    decidedOn: "2026-08-26"

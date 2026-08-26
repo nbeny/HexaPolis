@@ -230,14 +230,45 @@ Passez `electionDate` (`2024-06-30` pour le premier tour, `2024-07-07` pour le s
 
 ## Task 4 : Import réel et arbitrage des six cas
 
-- [ ] Importer les deux tours, rapporter les chiffres réels.
-- [ ] Vérifier que **577 candidatures portent `elected = true`**.
-- [ ] Vérifier que `silver.person` reste à 3 119 : cette source ne crée aucune personne.
-- [ ] Lancer `poligraph resolve review --source DATA_GOUV` et consigner ce qu'il produit.
-- [ ] **Écrire les six arbitrages** dans `data/identity-decisions.yaml`, avec un motif explicite pour chacun — c'est le premier usage réel de ce fichier, et il doit servir d'exemple pour les suivants. Vérifier avant d'écrire que la circonscription désigne bien une personne unique dans chaque cas.
-- [ ] Réimporter et vérifier que les six sont désormais rattachés.
-- [ ] Rafraîchir les vues `gold`, interroger l'API pour un député, et vérifier que la section « élections et résultats » est alimentée.
-- [ ] Consigner les chiffres réels dans ce plan et committer.
+- [x] Importer les deux tours, rapporter les chiffres réels.
+- [x] Vérifier que **577 candidatures portent `elected = true`**.
+- [x] Vérifier que `silver.person` reste à 3 119 : cette source ne crée aucune personne.
+- [x] Lancer `poligraph resolve review --source DATA_GOUV` et consigner ce qu'il produit.
+- [x] **Écrire les six arbitrages** dans `data/identity-decisions.yaml`, avec un motif explicite pour chacun — c'est le premier usage réel de ce fichier, et il doit servir d'exemple pour les suivants. Vérifier avant d'écrire que la circonscription désigne bien une personne unique dans chaque cas.
+- [x] Réimporter et vérifier que les six sont désormais rattachés.
+- [x] Rafraîchir les vues `gold`, interroger l'API pour un député, et vérifier que la section « élections et résultats » est alimentée.
+- [x] Consigner les chiffres réels dans ce plan et committer.
+
+### Réalisé — chiffres réels (import du 2026-08-26)
+
+**Import** (`poligraph import resultats:legislatives`) : 1er tour 4 009 candidats dépivotés (créés), 2nd tour 1 094 — exactement les chiffres mesurés. `silver.candidacy` : round 1 → 4 009 lignes, 76 élues ; round 2 → 1 094 lignes, 501 élues. 76 + 501 = **577**. `silver.person` inchangé à **3 119**. Toutes les candidatures des deux tours résolvent un territoire (`silver.candidacy.territory_id IS NOT NULL` : 5 103 / 5 103).
+
+**Piège supplémentaire trouvé à l'import réel, non mesuré dans la phase de préparation** : au-delà du zéro manquant (34 circonscriptions), le fichier publie deux départements sous un code alphabétique que `silver.territory` ne porte pas sous cette forme — `ZZ01`…`ZZ11` pour les 11 circonscriptions des Français établis hors de France (portées en base sous `099-1`…`099-11`, comme le RNE) et `ZX01` pour Saint-Barthélemy/Saint-Martin (porté en base sous `977-1`). Sans correctif, 157 candidatures des deux tours (dont 12 élues, une par circonscription concernée) restaient sans territoire, sans lever d'erreur — exactement le risque silencieux que le critère « chaque circonscription résout un territoire » est censé attraper. Corrigé par un alias explicite (`ZZ → 099`, `ZX → 977`) dans `districtCodeFromCirconscription` (`packages/ingestion/src/adapters/resultats/normalize-resultats.ts`), avec deux tests dédiés.
+
+**Bug de portée corrigé en même temps** : les deux tours partagent le `sourceId` `DATA_GOUV` mais sont deux runs distincts, chacun ne connaissant que les `sourceKey` de son propre fichier (préfixées par le tour). `assertDecisionsAreResolvable` recevait la liste complète des décisions à chaque run, y compris celles visant l'autre tour — qu'il ne pouvait jamais résoudre. Corrigé par un filtre `decisionAppliesToRound` avant l'appel, avec un test de régression.
+
+**`resolve review --source DATA_GOUV`** : 307 rapprochements en attente d'arbitrage (PROBABLE + POSSIBLE + AMBIGUOUS + CONFLICT), et 3 726 `UNMATCHED` exclus par défaut (candidats non élus, sans personne correspondante — l'écrasante majorité des ~4 000 candidats non retenus). Les 50 premiers PROBABLE affichés sont tous des candidats connus rapprochés sur nom + circonscription, plafonnés à PROBABLE faute de date de naissance dans cette source (comme prévu par la conception).
+
+**Les six élus non rapprochés par le nom**, dérivés par `SELECT ... WHERE elected AND person_id IS NULL` (et non recopiés de la liste indicative du plan) :
+
+| Circonscription | Résultats électoraux | En base (AN) | PA |
+|---|---|---|---|
+| 04-2 (Alpes-de-Haute-Provence) | Sophie VAGINAY | Sophie Ricourt Vaginay | PA840657 |
+| 13-16 (Bouches-du-Rhône) | Emmanuel TACHE DE LA PAGERIE | Emmanuel Taché | PA793382 |
+| 53-3 (Mayenne) | Yannick FAVENNEC | Yannick Favennec-Bécot | PA267042 |
+| 78-8 (Yvelines) | Benjamin LUCAS | Benjamin Lucas-Lundy | PA795636 |
+| 974-4 (La Réunion) | Emeline KBIDI | Émeline K/Bidi | PA795998 |
+| 987-3 (Polynésie française) | Mereana REID ABERLOT | Mereana Reid Arbelot | PA795240 |
+
+Le sixième cas, à identifier à l'import comme prévu par le plan, est Mereana Reid Arbelot/Aberlot (987-3) — transposition de deux lettres, pas une omission de patronyme composé comme les cinq autres. Pour chacun, vérifié avant d'écrire la décision qu'un seul mandat parlementaire de la 17e législature existe pour cette circonscription (`silver.mandate` × `silver.legislature.number = 17` × `silver.territory.code`) : aucun des six ne fait partie des 68 circonscriptions à mandats multiples.
+
+Après réécriture de `data/identity-decisions.yaml` (six décisions `MERGE`, motif en français citant la vérification effectuée) et réimport (`--renormalize`), les six candidatures sont rattachées : `SELECT count(*) FROM silver.candidacy WHERE elected AND person_id IS NULL` → **0**. `silver.person` toujours **3 119**.
+
+**API** : après `gold refresh` et démarrage compilé (`PORT=4100 pnpm --filter @poligraph/api serve`), la fiche de Michèle Martinez (`PA794770`, 4e circonscription des Pyrénées-Orientales) porte trois candidatures triées par année décroissante — 2024 tour 2 (38 045 voix, 37,03 % inscrits, 58,14 % exprimés, élue), 2024 tour 1 (33 159 voix, non élue), 2022 CNCCFP (`round`, `votes`, les deux pourcentages à `null`, jamais `0`). La fiche de Sophie Ricourt Vaginay (un des six arbitrages) confirme le rattachement : 21 655 voix, 32,48 % inscrits, élue, 2e circonscription des Alpes-de-Haute-Provence.
+
+**Écart de scope signalé par le coordinateur et traité** : le modèle GraphQL `Candidacy` n'exposait pas `round`/`votes`/`votePctRegistered`/`votePctExpressed`/`elected` — le critère d'achèvement « une fiche affiche les voix et le pourcentage » ne pouvait pas être vérifié. Ajoutés à `apps/api/src/graphql/models/candidacy.model.ts` et `SilverRepository.candidaciesForPerson` (réutilise `toNumber` pour les `Decimal`), avec un test dans `apps/api/tests/fiche.test.ts` couvrant à la fois la présence (candidature 2024 avec résultats) et l'absence explicite (candidature CNCCFP 2022, `null` partout sauf `elected: false`).
+
+`pnpm -r test` : tous les paquets testés passent (`packages/ingestion` 198 tests, `apps/api` 31 tests).
 
 ---
 

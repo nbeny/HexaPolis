@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { Prisma, type PrismaClient } from '@poligraph/db'
 import { buildDisplayName, normalizeNameForMatching, type IdentityCandidate } from '@poligraph/domain'
 import type { ImportRunRef, NormalizeReport } from '../../contract.js'
-import { readDecisions } from '../../identity/decisions-file.js'
+import { readDecisions, type IdentityDecision } from '../../identity/decisions-file.js'
 import { assertDecisionsAreResolvable, buildKnownPersonIndex, resolveAndRecordIdentity } from '../../identity/resolve-identity.js'
 import { recordRejection } from '../../run/import-run.js'
 
@@ -39,8 +39,24 @@ const DEFAULT_DECISIONS_PATH = fileURLToPath(
  * complément, `101` (1er tour) produirait `1-1` au lieu de `01-1` : la
  * circonscription ne serait jamais retrouvée, sans lever la moindre erreur.
  */
+/**
+ * Alias de code département mesurés sur le fichier réel (au-delà du zéro
+ * manquant ci-dessus) : le ministère publie ces circonscriptions sous un code
+ * département alphabétique qui ne correspond à aucun code `Territory` en
+ * base — celle-ci les porte sous leur code INSEE numérique, le même que le
+ * RNE (plan 3). Sans cet alias, les 11 circonscriptions des Français établis
+ * hors de France et celle de Saint-Barthélemy/Saint-Martin ne se rattachent
+ * jamais, sans lever la moindre erreur : `territoryId` reste simplement
+ * `null` (157 candidatures des deux tours, mesuré sur l'import réel).
+ */
+const DEPARTMENT_CODE_ALIASES: Record<string, string> = {
+  ZZ: '099', // Français établis hors de France (11 circonscriptions)
+  ZX: '977', // Saint-Barthélemy et Saint-Martin
+}
+
 function padDepartmentCode(raw: string): string {
-  return /^\d$/.test(raw) ? raw.padStart(2, '0') : raw
+  const aliased = DEPARTMENT_CODE_ALIASES[raw] ?? raw
+  return /^\d$/.test(aliased) ? aliased.padStart(2, '0') : aliased
 }
 
 /**
@@ -117,6 +133,22 @@ interface ExploitableRow {
     blank: number | null
     nullVotes: number | null
   }
+}
+
+/**
+ * Une décision DATA_GOUV ne s'applique qu'au tour dont sa sourceKey porte le
+ * préfixe (`${round}|...`) : les deux tours partagent le même sourceId mais
+ * sont deux runs distincts, chacun avec son propre espace de sourceKey (voir
+ * l'appel à `assertDecisionsAreResolvable` ci-dessous). Une décision qui ne
+ * vise pas DATA_GOUV (ex. un SPLIT entre deux autres sources) est laissée
+ * passer telle quelle : ce filtre ne concerne que cette source.
+ */
+function decisionAppliesToRound(decision: IdentityDecision, round: Round): boolean {
+  for (const ref of [decision.left, decision.right]) {
+    if (ref.source !== RESULTATS_SOURCE) continue
+    if (!ref.key.startsWith(`${round}|`)) return false
+  }
+  return true
 }
 
 /**
@@ -216,8 +248,15 @@ export async function normalizeResultats(
   }
 
   const decisions = await readDecisions(decisionsPath)
+  // Les deux tours partagent le même sourceId (DATA_GOUV) mais sont deux runs
+  // distincts, chacun ne connaissant que les sourceKey de son propre fichier
+  // (préfixées par le tour, ex. `2|53-3|3|...`). Une décision visant le 2nd
+  // tour ne peut donc jamais se vérifier pendant le run du 1er : sans ce
+  // filtre, assertDecisionsAreResolvable la déclarerait introuvable alors
+  // qu'elle sera bien résolue par le run du tour auquel elle appartient.
+  const decisionsForThisRound = decisions.filter((decision) => decisionAppliesToRound(decision, round))
   assertDecisionsAreResolvable(
-    decisions,
+    decisionsForThisRound,
     RESULTATS_SOURCE,
     new Set(exploitable.map((entry) => `${round}|${entry.districtCode}|${entry.numeroPanneau}|${entry.matchKey}`)),
     decisionsPath,
