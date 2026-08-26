@@ -4,3 +4,5 @@ dist/
 .data/
 .env
 *.log
+.next/
+next-env.d.ts
