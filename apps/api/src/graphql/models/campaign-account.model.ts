@@ -3,7 +3,7 @@ import { Field, Float, ObjectType } from '@nestjs/graphql'
 /**
  * Aucun montant n'est estimé, arrondi ou recalculé (spec §5.4) : chaque
  * champ nullable reste `null` quand la CNCCFP ne l'a pas déclaré, plutôt que
- * `0` — la même règle d'absence que `VotingSummary.participationRate`.
+ * `0` — la même règle d'absence que `VotingSummary.participationExpressedRate`.
  */
 @ObjectType()
 export class CampaignAccount {

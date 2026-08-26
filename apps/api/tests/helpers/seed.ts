@@ -170,12 +170,18 @@ export async function seedFiche(prisma: PrismaClient): Promise<SeededFiche> {
         bodyIdAtVote: group.id,
       },
     })
+    // Bob est nommé sur les 3 scrutins, mais NON_VOTANT sur le dernier :
+    // l'Assemblée le nomme sans qu'aucune position de fond soit enregistrée.
+    // C'est la forme du cas qui faisait afficher « Taux de participation :
+    // 100,00 % » sur la fiche de la présidente de l'Assemblée nationale
+    // (8 341 NON_VOTANT sur 8 434 scrutins éligibles), et ce qui permet de
+    // vérifier ici que l'API expose la décomposition, pas un chiffre unique.
     await prisma.ballotPosition.create({
       data: {
         naturalKey: `position-bob-17-${i}`,
         ballotId: ballot.id,
         personId: bob.id,
-        position: 'POUR',
+        position: i === 2 ? 'NON_VOTANT' : 'POUR',
         bodyIdAtVote: group.id,
       },
     })

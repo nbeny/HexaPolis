@@ -5,7 +5,7 @@
  * Cette fonction convertit les deux, et laisse `null`/`undefined` intacts —
  * c'est précisément la distinction (absence vs zéro) que l'API doit
  * préserver jusqu'au bout : ne jamais transformer un `NULL` de
- * `gold.deputy_card.participation_rate` en `0`.
+ * `gold.deputy_card.participation_expressed_rate` en `0`.
  */
 export function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null

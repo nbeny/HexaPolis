@@ -169,8 +169,10 @@ type VotingSummary {
   committeeCount: Int!
   mandateCount: Int!
   participationBallotCount: Int
-  participationRate: Float
-  participationVoteCount: Int
+  participationExpressedCount: Int
+  participationExpressedRate: Float
+  participationNamedCount: Int
+  participationNonVotingCount: Int
   status: FactStatus!
   voteCount: Int!
 }

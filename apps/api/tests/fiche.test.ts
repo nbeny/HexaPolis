@@ -32,7 +32,7 @@ describe('deputy(slug) — fiche complète', () => {
           mandates { kind legislatureNumber territoryLabel startDate endDate }
           groupMemberships { bodyLabel }
           committees { bodyLabel }
-          votingSummary { status mandateCount committeeCount voteCount participationRate }
+          votingSummary { status mandateCount committeeCount voteCount participationBallotCount participationNamedCount participationExpressedCount participationNonVotingCount participationExpressedRate }
           candidacies { electionLabel round votes votePctRegistered votePctExpressed elected account { declaredExpenses declaredIncome } }
           sources { sourceId label }
         }
@@ -58,6 +58,13 @@ describe('deputy(slug) — fiche complète', () => {
     expect(deputy.votingSummary.status).toBe('COMPUTED')
     expect(deputy.votingSummary.mandateCount).toBe(2)
     expect(deputy.votingSummary.voteCount).toBe(3) // 3 scrutins de la 17e, Alice y vote tous.
+    // Décomposition : Alice exprime une position sur les 3 scrutins éligibles,
+    // aucun non-vote. Le taux ne vaut 100 % que dans ce cas-là.
+    expect(deputy.votingSummary.participationBallotCount).toBe(3)
+    expect(deputy.votingSummary.participationNamedCount).toBe(3)
+    expect(deputy.votingSummary.participationExpressedCount).toBe(3)
+    expect(deputy.votingSummary.participationNonVotingCount).toBe(0)
+    expect(deputy.votingSummary.participationExpressedRate).toBeCloseTo(1)
 
     // Deux candidatures, triées par année d'élection décroissante : 2024
     // (DATA_GOUV, résultats officiels) puis 2022 (CNCCFP, compte de campagne).
@@ -101,6 +108,37 @@ describe('deputy(slug) — fiche complète', () => {
     const { body } = await testApp.graphql(`{ deputy(slug: "pa000001-nimporte-quoi") { id } }`)
     expect(body.errors).toBeUndefined()
     expect((body.data as any).deputy.id).toBe(fixture.alice.id)
+  })
+
+  it("expose la décomposition de la participation, et n'y compte pas les non-votes", async () => {
+    const { body } = await testApp.graphql(
+      `query($slug: String!) {
+        deputy(slug: $slug) {
+          votingSummary {
+            participationBallotCount
+            participationNamedCount
+            participationExpressedCount
+            participationNonVotingCount
+            participationExpressedRate
+          }
+        }
+      }`,
+      { slug: fixture.bob.slug },
+    )
+    expect(body.errors).toBeUndefined()
+    const resume = (body.data as any).deputy.votingSummary
+
+    // Bob est nommé sur les 3 scrutins éligibles, dont 1 en NON_VOTANT.
+    // L'ancien `participationRate` comptait ce non-vote comme une
+    // participation et rendait 3/3 = 1. Le taux ne porte plus que les
+    // positions exprimées, et le décompte des non-votes est publié à côté :
+    // c'est ce qui empêche de lire 0,67 comme « il manque un tiers des
+    // scrutins » aussi bien que de lire 1 comme « il vote tout ».
+    expect(resume.participationBallotCount).toBe(3)
+    expect(resume.participationNamedCount).toBe(3)
+    expect(resume.participationExpressedCount).toBe(2)
+    expect(resume.participationNonVotingCount).toBe(1)
+    expect(resume.participationExpressedRate).toBeCloseTo(2 / 3, 3)
   })
 
   it(

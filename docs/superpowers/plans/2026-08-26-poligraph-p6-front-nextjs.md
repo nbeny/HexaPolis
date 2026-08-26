@@ -1411,6 +1411,58 @@ l'écran : Sophie Ricourt Vaginay 21 655 voix / 50,97 % / Élu(e),
 Mereana Reid Arbelot 17 308 / 50,87 %, Yannick Favennec-Bécot 31 379 / 68,90 % —
 identiques à `silver.candidacy`.
 
+### Décomposition de la participation — relevé du 26 août 2026
+
+Migration `20260826174500_gold_participation_decomposee`. Le défaut : sous le
+libellé « Taux de participation », `participation_rate` rapportait aux scrutins
+éligibles le nombre de scrutins où l'Assemblée **nomme** le député, toutes
+positions confondues — donc `NON_VOTANT` comprise. Répartition en base sur la
+17e législature : `CONTRE` 620 352 · `POUR` 555 568 · `ABSTENTION` 71 173 ·
+`NON_VOTANT` 23 383.
+
+**Avant / après, en base :**
+
+| Député | Avant (`participation_rate`) | Après : éligibles / nommés / exprimées / non-votant | Après (`participation_expressed_rate`) |
+| --- | --- | --- | --- |
+| Yaël Braun-Pivet | 8 434 / 8 434 = **100,00 %** | 8 434 / 8 434 / **93** / **8 341** | **1,10 %** |
+| Sébastien Chenu | 1 753 / 8 434 = 20,78 % | 8 434 / 1 753 / 977 / 776 | 11,58 % |
+| Alexis Corbière (témoin) | 1 610 / 8 434 = 19,09 % | 8 434 / 1 610 / 1 610 / **0** | **19,09 %** — inchangé |
+
+**Ce que rend la fiche** (API `127.0.0.1:4000`, front `127.0.0.1:3100`,
+`pa721908-yael-braun-pivet`) :
+
+```
+Positions enregistrées (17e législature)               8 434
+Scrutins éligibles au calcul (17e législature)         8 434
+Scrutins où l’Assemblée nomme ce député                8 434 sur 8 434
+dont position exprimée (pour, contre, abstention)      93
+dont non-votant                                        8 341
+Positions exprimées rapportées aux scrutins éligibles  1,10 %
+```
+
+Chaque ligne porte « Calculé par PoliGraph ». Le mot « participation » ne
+qualifie plus aucun pourcentage : c'est lui qui autorisait les deux lectures
+opposées du même chiffre. Aucun texte n'explique *pourquoi* un député est
+non-votant — la source ne publie pas de motif, la catégorie recouvre des
+situations sans rapport entre elles, et la fiche le dit sans trancher.
+
+**Population, sur les 567 fiches :** 566 ont un numérateur, 1 non (Chantal
+Bouloux, `pa793528`, dont la fiche continue d'afficher le motif d'absence et
+jamais `0 %` — la règle posée par `20260826150500` est conservée et étendue aux
+trois décomptes, NULL ensemble ou renseignés ensemble). **550 députés ont
+exactement 0 `NON_VOTANT`** ; 16 en ont au moins un ; 11 dépassent 5 % de
+leurs scrutins nommés, 8 dépassent 10 %, 4 dépassent 30 % (Braun-Pivet 98,9 %,
+Chenu 44,3 %, Christophe Blanchet 32,9 %, Xavier Breton 30,7 %). **Aucun
+député n'affiche un taux de 0,00 %.** Le taux publié va de 0,05 %
+(Marie-Sophie Bernadeau, nommée sur 4 scrutins — voir l'écart 11) à 77,39 %
+(Marine Hamelet, 6 527 scrutins nommés, 6 527 exprimées, 0 non-votant).
+
+**Coût du rafraîchissement**, `refreshGold` sur la base de développement :
+`gold.deputy_card` 4,3 s (567 lignes), `gold.deputy_vote` 38,7 s (1 731 841
+lignes, vue non modifiée). La séparation dénominateur / numérateur posée par
+`20260826150500` est conservée — les trois décomptes sont des `FILTER` sur la
+même agrégation, sans parcours supplémentaire.
+
 ### Écarts connus, à traiter hors plan 6
 
 1. **Provenance partielle.** Seule la source `AN` porte une provenance au niveau
@@ -1435,6 +1487,11 @@ identiques à `silver.candidacy`.
    qui siège sans voter aurait une ligne par scrutin ; zéro ligne signifie que
    la source ne le nomme pas, jamais qu'il n'a participé à aucun. `0 sur 8 434`
    aurait été une affirmation que la donnée ne soutient pas.*
+
+   *Suite du 26 août 2026 : en corrigeant ce point on a établi que le
+   numérateur comptait les positions `NON_VOTANT`, ce qui rendait le taux
+   lui-même faux sous son libellé. Voir l'écart 10 et le relevé
+   « Décomposition de la participation » ci-dessus.*
 4. **Message d'absence trompeur en pagination.** `/deputes?departmentCode=33&after=b2Zmc2V0OjI1`
    annonce « 12 députés correspondent aux filtres actifs » puis affiche « Aucun
    député ne correspond à ces filtres. Seuls les députés de la 17e législature
@@ -1464,6 +1521,36 @@ identiques à `silver.candidacy`.
    de la 17e législature, donc `/?q=Besson` rend l'état « aucun résultat ».
    L'homonymie réellement observable par la recherche est « Alexandra Martin »
    (Alpes-Maritimes et Gironde), correctement distinguée par le slug.
+10. **Le « Taux de participation » comptait les non-votes.** *Relevé et corrigé
+    le 26 août 2026 par la migration
+    `20260826174500_gold_participation_decomposee`.* `participation_rate`
+    divisait par les scrutins éligibles le nombre de scrutins où
+    l'Assemblée **nomme** le député, toutes positions confondues, `NON_VOTANT`
+    comprise. La fiche l'affichait sous « Taux de participation » avec le badge
+    « Calculé par PoliGraph ». Mesuré en base : Yaël Braun-Pivet, présidente de
+    l'Assemblée nationale, 8 434/8 434 = **100,00 %** alors que 8 341 de ces
+    8 434 positions sont des `NON_VOTANT` et qu'une position exprimée n'est
+    enregistrée pour elle que sur **93** scrutins. Sortir les `NON_VOTANT` du
+    numérateur sous le même libellé aurait affiché **1,10 %**, tout aussi faux
+    dans l'autre sens. Correctif retenu : décomposition en cinq colonnes
+    (`participation_ballot_count`, `_named_count`, `_expressed_count`,
+    `_non_voting_count`, `_expressed_rate`), le décompte des non-votes remontant
+    jusqu'à la fiche, et un libellé de taux qui nomme son numérateur et son
+    dénominateur. Détail et chiffres au relevé « Décomposition de la
+    participation » ci-dessus.
+11. **Un député nommé sur très peu de scrutins affiche un taux minuscule.**
+    Marie-Sophie Bernadeau : mandat ouvert au 2024-07-07 dans la source, donc
+    dénominateur de 8 434, mais l'Assemblée ne la nomme que sur **4** scrutins,
+    tous du 2026-07-21 — le dernier jour du corpus. Sa fiche rend « 4 sur
+    8 434 » et « 0,05 % ». Le chiffre est fidèle à la base et l'avertissement
+    de section dit que l'écart n'est pas un décompte d'absences, mais la donnée
+    ne permet pas de distinguer une arrivée très récente d'une abstention
+    massive : `silver.mandate` ne porte qu'une date de début, identique à celle
+    de l'ouverture de la législature. Écart antérieur à la décomposition et non
+    modifié par elle (0 `NON_VOTANT` pour cette députée). Deux autres fiches
+    sont dans le même cas — 3 députés au total ont un taux publié sous 0,5 %,
+    et ce sont exactement les 3 que l'Assemblée nomme sur moins de 100
+    scrutins.
 
 ---
 
@@ -1477,8 +1564,10 @@ identiques à `silver.candidacy`.
   (bloc `Absent` + lien CNCCFP) ; « Élections et résultats » affiche son motif
   mais sans lien officiel. Et une fiche sur 567 affiche `0,00 %` en se
   contredisant (écart 3).*
-- ✅ Le taux de participation porte visiblement la mention « calculé par
-  PoliGraph » (badge textuel, avec `title` explicatif).
+- ✅ Les chiffres de participation portent visiblement la mention « calculé par
+  PoliGraph » (badge textuel, avec `title` explicatif). *Depuis le 26 août 2026,
+  ce n'est plus un « taux de participation » unique mais une décomposition de
+  cinq lignes, badgées une à une — voir l'écart 10.*
 - ⚠️ Chaque section affiche sa source et sa date d'import. *Quatre sections sur
   six ; les élections et le financement n'ont pas de provenance au niveau
   `Person` en base (écart 1).*

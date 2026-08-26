@@ -26,8 +26,10 @@ export const DEPUTY_QUERY = /* GraphQL */ `
         committeeCount
         voteCount
         participationBallotCount
-        participationVoteCount
-        participationRate
+        participationNamedCount
+        participationExpressedCount
+        participationNonVotingCount
+        participationExpressedRate
       }
       mandates {
         id

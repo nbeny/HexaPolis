@@ -194,9 +194,15 @@ export class DeputyResolver {
    * Point 1 de la tâche : `status` porte toujours `COMPUTED`, explicitement
    * — pas seulement déductible du nom du type. Point 2 : les champs de
    * participation restent `null` quand `gold.deputy_card` les porte `null`
-   * (dénominateur invérifiable) ou quand `legislature` sort de la 17e — voir
+   * (dénominateur invérifiable, ou source qui ne nomme le député sur aucun
+   * scrutin éligible) ou quand `legislature` sort de la 17e — voir
    * `GoldRepository.countVotesForLegislature`, qui ne recalcule jamais une
    * participation que `gold` ne porte pas pour cette législature.
+   *
+   * Les cinq champs de la décomposition sont recopiés ou mis à `null` en bloc,
+   * jamais partiellement : publier le seul `participationExpressedRate` sans
+   * `participationNonVotingCount` reviendrait à republier le chiffre que la
+   * migration 20260826174500_gold_participation_decomposee a supprimé.
    */
   @ResolveField(() => VotingSummary)
   async votingSummary(
@@ -212,8 +218,10 @@ export class DeputyResolver {
       summary.committeeCount = 0
       summary.voteCount = 0
       summary.participationBallotCount = null
-      summary.participationVoteCount = null
-      summary.participationRate = null
+      summary.participationNamedCount = null
+      summary.participationExpressedCount = null
+      summary.participationNonVotingCount = null
+      summary.participationExpressedRate = null
       return summary
     }
 
@@ -225,16 +233,20 @@ export class DeputyResolver {
     if (legislature === undefined || legislature === 17) {
       summary.voteCount = card.voteCount
       summary.participationBallotCount = card.participationBallotCount
-      summary.participationVoteCount = card.participationVoteCount
-      summary.participationRate = card.participationRate
+      summary.participationNamedCount = card.participationNamedCount
+      summary.participationExpressedCount = card.participationExpressedCount
+      summary.participationNonVotingCount = card.participationNonVotingCount
+      summary.participationExpressedRate = card.participationExpressedRate
     } else {
       summary.voteCount = await this.goldRepository.countVotesForLegislature(
         deputy.id,
         legislature,
       )
       summary.participationBallotCount = null
-      summary.participationVoteCount = null
-      summary.participationRate = null
+      summary.participationNamedCount = null
+      summary.participationExpressedCount = null
+      summary.participationNonVotingCount = null
+      summary.participationExpressedRate = null
     }
 
     return summary

@@ -23,8 +23,10 @@ interface DeputyCardRawRow {
   committee_count: unknown
   vote_count: unknown
   participation_ballot_count: unknown
-  participation_vote_count: unknown
-  participation_rate: unknown
+  participation_named_count: unknown
+  participation_expressed_count: unknown
+  participation_non_voting_count: unknown
+  participation_expressed_rate: unknown
   computed_status: string
   refreshed_at: Date
 }
@@ -48,8 +50,10 @@ export interface DeputyCard {
   committeeCount: number
   voteCount: number
   participationBallotCount: number | null
-  participationVoteCount: number | null
-  participationRate: number | null
+  participationNamedCount: number | null
+  participationExpressedCount: number | null
+  participationNonVotingCount: number | null
+  participationExpressedRate: number | null
   computedStatus: string
   refreshedAt: Date
 }
@@ -74,8 +78,10 @@ function mapCard(row: DeputyCardRawRow): DeputyCard {
     committeeCount: toNumber(row.committee_count) ?? 0,
     voteCount: toNumber(row.vote_count) ?? 0,
     participationBallotCount: toNumber(row.participation_ballot_count),
-    participationVoteCount: toNumber(row.participation_vote_count),
-    participationRate: toNumber(row.participation_rate),
+    participationNamedCount: toNumber(row.participation_named_count),
+    participationExpressedCount: toNumber(row.participation_expressed_count),
+    participationNonVotingCount: toNumber(row.participation_non_voting_count),
+    participationExpressedRate: toNumber(row.participation_expressed_rate),
     computedStatus: row.computed_status,
     refreshedAt: row.refreshed_at,
   }
@@ -251,7 +257,9 @@ export class GoldRepository {
    * Pour une législature différente, on compte en direct sur
    * `gold.deputy_vote` — qui couvre tout l'historique du député — plutôt que
    * de recalculer une participation que `gold` ne porte pas pour cette
-   * législature. `participationRate` reste `null` dans ce cas : voir
+   * législature. Toutes les colonnes `participation*` restent `null` dans ce
+   * cas — décomposition comprise, sans quoi un décompte se lirait comme un
+   * zéro alors qu'il n'a pas été calculé pour cette législature : voir
    * `DeputyResolver.votingSummary`.
    */
   async countVotesForLegislature(personId: string, legislature: number): Promise<number> {

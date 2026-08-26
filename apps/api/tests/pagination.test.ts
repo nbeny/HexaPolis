@@ -105,7 +105,8 @@ describe('Deputy.votingSummary — argument legislature', () => {
     query($slug: String!, $legislature: Int) {
       deputy(slug: $slug) {
         votingSummary(legislature: $legislature) {
-          status voteCount participationRate
+          status voteCount participationBallotCount participationNamedCount
+          participationExpressedCount participationNonVotingCount participationExpressedRate
         }
       }
     }
@@ -124,7 +125,13 @@ describe('Deputy.votingSummary — argument legislature', () => {
     expect(summary.voteCount).toBe(1)
     // gold.deputy_card n'agrège la participation que pour la 17e : jamais
     // recalculée pour une autre législature, donc absente plutôt que fausse.
-    expect(summary.participationRate).toBeNull()
+    // Toute la décomposition part avec elle — publier « dont non-votant : 0 »
+    // pour une législature non agrégée serait un chiffre inventé.
+    expect(summary.participationBallotCount).toBeNull()
+    expect(summary.participationNamedCount).toBeNull()
+    expect(summary.participationExpressedCount).toBeNull()
+    expect(summary.participationNonVotingCount).toBeNull()
+    expect(summary.participationExpressedRate).toBeNull()
   })
 
   // DeputyResolver.votingSummary testait `legislature === undefined ||
@@ -137,6 +144,7 @@ describe('Deputy.votingSummary — argument legislature', () => {
     expect(body.errors).toBeUndefined()
     const summary = (body.data as any).deputy.votingSummary
     expect(summary.voteCount).toBe(3)
-    expect(summary.participationRate).not.toBeNull()
+    expect(summary.participationExpressedRate).not.toBeNull()
+    expect(summary.participationNonVotingCount).not.toBeNull()
   })
 })
