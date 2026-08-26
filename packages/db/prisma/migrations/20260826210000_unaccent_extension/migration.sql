@@ -1,0 +1,21 @@
+-- Recherche insensible aux accents (écart 5 du plan p6, tâche 8).
+--
+-- `GoldRepository.searchCards` faisait un `ILIKE` brut : `?q=Corbière` trouvait
+-- Alexis Corbière, `?q=Corbiere` ne trouvait rien. Sur un site français, une
+-- absence de résultat se lit comme une absence de donnée, pas comme une faute
+-- de frappe — c'est précisément l'impression fausse que ce projet évite
+-- ailleurs. `unaccent` est disponible dans l'image Postgres du projet
+-- (confirmé via `pg_available_extensions`) et n'était pas encore installé.
+--
+-- L'extension est créée dans le schéma par défaut (`public`), qui reste sur
+-- le `search_path` de la connexion (`"$user", public`) : `unaccent(...)` est
+-- donc appelable sans qualification depuis les requêtes de `gold.repository.ts`.
+--
+-- Pas d'index d'expression ici : `unaccent()` n'est pas `IMMUTABLE` par
+-- défaut (elle dépend du dictionnaire de recherche configuré), ce qui
+-- empêche `CREATE INDEX ... (unaccent(display_name))` sans un wrapper
+-- `IMMUTABLE` maison. À 577 fiches, un scan séquentiel avec deux appels à
+-- `unaccent()` par ligne coûte largement moins d'une milliseconde ; écrire et
+-- maintenir un wrapper juste pour indexer une table de cette taille serait
+-- de la complexité sans bénéfice mesurable.
+CREATE EXTENSION IF NOT EXISTS "unaccent";

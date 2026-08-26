@@ -216,11 +216,24 @@ export class GoldRepository {
     }
   }
 
+  /**
+   * Insensible aux accents dans les deux sens (`?q=Corbiere` trouve Alexis
+   * Corbière, `?q=Corbière` aussi) grâce à `unaccent()` (extension Postgres,
+   * migration `20260826210000_unaccent_extension`) appliquée au motif comme
+   * aux colonnes. Sans quoi une recherche non accentuée sur un site français
+   * se lit comme une absence de donnée plutôt que comme une variante
+   * orthographique — voir l'écart 5 du plan p6.
+   *
+   * Pas d'index d'expression : `unaccent()` n'est pas `IMMUTABLE`, et à 577
+   * fiches un scan séquentiel est déjà de l'ordre de la milliseconde (voir la
+   * migration pour le détail du choix).
+   */
   async searchCards(query: string, limit: number): Promise<DeputyCard[]> {
     const pattern = `%${query}%`
     const rows = await this.prisma.$queryRaw<DeputyCardRawRow[]>`
       SELECT * FROM gold.deputy_card
-      WHERE display_name ILIKE ${pattern} OR constituency_label ILIKE ${pattern}
+      WHERE unaccent(display_name) ILIKE unaccent(${pattern})
+         OR unaccent(constituency_label) ILIKE unaccent(${pattern})
       ORDER BY display_name
       LIMIT ${limit}
     `
