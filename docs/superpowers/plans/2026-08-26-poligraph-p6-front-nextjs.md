@@ -1733,6 +1733,92 @@ même agrégation, sans parcours supplémentaire.
     établis hors de France » (code `099` en base) — suivi d'une
     renormalisation qui laissera la cascade rattacher ces dix-là toute seule.
 
+    *Corrigé le 26 août 2026 dans `districtCodeFromRow`
+    (`packages/ingestion/src/adapters/cnccfp/normalize-cnccfp.ts`), sans
+    migration et sans arbitrage humain.*
+
+    **Distribution réellement mesurée** sur `bronze.cnccfp_compte_raw`
+    (6 292 lignes stagées, 6 290 exploitables — 2 lignes corrompues dont tous
+    les champs valent « 0 », déjà rejetées `UNPARSEABLE_NAME`). Les seuls
+    `code département` qui s'écartent d'un ou deux chiffres sont `20A` (23),
+    `20B` (20) et les codes à trois chiffres `971` (59), `972` (55), `973`
+    (27), `974` (92), `975` (4), `976` (21), `977` (6), `986` (7), `987` (27),
+    `988` (17). **Aucune autre famille n'était en défaut** : les codes à trois
+    chiffres sont déjà ceux de `Territory`, et les cinq libellés
+    « Circonscription unique » — Creuse (11), Lozère (11),
+    Saint-Pierre-et-Miquelon (4), Saint-Barthélemy et Saint-Martin (6),
+    Wallis-et-Futuna (7) — se résolvaient déjà correctement en `-1`.
+    Saint-Barthélemy/Saint-Martin porte bien `977`, le même code que
+    `DEPARTMENT_CODE_ALIASES` de la source résultats (`ZX` → `977`) : les deux
+    sources s'accordaient déjà sur cette circonscription. Les 149 lignes des
+    Français établis hors de France portent toutes `code département = 75` et
+    `département = « Paris »`, réparties sur les onze circonscriptions (1ère
+    12, 2e 14, 3e 11, 4e 10, 5e 12, 6e 15, 7e 16, 8e 13, 9e 22, 10e 16, 11e 8).
+
+    **Correctif.** Un `DEPARTMENT_CODE_ALIASES` documenté (`20A` → `2A`,
+    `20B` → `2B`), de même forme et de même intention que celui de
+    `normalize-resultats.ts`, et — pour les Français établis hors de France —
+    une reconnaissance du **libellé**, seul endroit où figure la vraie
+    circonscription, qui l'emporte sur le code département publié et compose
+    `099-N`, le code canonique déjà posé par les deux autres sources. Le
+    numéro y est exigé explicitement : le repli « circonscription unique »
+    (qui vaut 1) n'y a aucun sens — elles sont onze — et désignerait la 1ère au
+    hasard. **Un libellé de cette famille sans numéro rend `null`**, donc
+    `territoryId` reste vide et le compte de campagne est publié sans
+    circonscription : une absence consignée, jamais une supposition. Effet
+    secondaire acquis au passage : l'unicité par circonscription
+    (`uniqueInDistrict`) ne mélange plus les candidats de Paris et ceux de
+    l'étranger dans le même seau.
+
+    **Clé naturelle inchangée** — `cnccfp|<candidat>` ne contient pas le
+    territoire (§6.2 de la spec). La renormalisation le confirme : *Créés 0,
+    Mis à jour 0, Inchangés 6 290*, aucun doublon.
+
+    **Contrôles après `import cnccfp:comptes --renormalize`** (bronze déjà
+    stagé, aucun accès réseau) :
+    - candidatures 2022 sans territoire **43 → 0** ;
+    - candidatures 2022 sur une circonscription de Paris **370 → 221**, soit
+      exactement les 149 lignes déplacées ; les 18 circonscriptions réelles
+      baissent toutes (75-1 24→12, 75-4 23→13, 75-9 35→13, 75-10 34→18…), et
+      `099-1`…`099-11` passent de 0 à 149, `2A-1`/`2A-2`/`2B-1`/`2B-2` de 0 à
+      43 ;
+    - `silver.person` toujours **3 119** (cette source ne crée aucune
+      personne) ;
+    - candidatures CNCCFP rattachées **609 → 625**, soit +16. Les **dix**
+      députés annoncés se rattachent tous **automatiquement**, en
+      `CONFIRMED` / `AUTO`, preuve `{NAME, DISTRICT, ELECTED_MANDATE}` :
+      Marcangeli (2A-1), Colombani (2A-2), Castellani (2B-1), Ceccoli (2B-2),
+      Anglade (099-4), Ferracci (099-6), Petit (099-7), Ben Cheïkh (099-9),
+      Lakrafi (099-10), Genetet (099-11) — la prédiction est vérifiée, aucune
+      décision d'arbitrage n'a été écrite. Les **six** rattachements
+      supplémentaires sont du même tonneau et n'avaient pas été anticipés :
+      Lescure (099-1), Caroit (099-2), Holroyd (099-3), Vojetta (099-5), Habib
+      (099-8), Acquaviva (2B-2). Répartition finale des 625 : 620
+      `AUTO`/`CONFIRMED` + 5 `HUMAN`/`CONFIRMED` — les 5 arbitrages de la
+      troisième vague sont intacts ;
+    - députés de `gold.deputy_card` portant un compte de campagne 2022
+      **414 → 424**.
+
+    **Fiche vérifiée en réel**, `/deputes/pa721158-pieyre-alexandre-anglade`
+    (l'identifiant AN réel est `PA721158`) : « Financement de campagne /
+    Élections législatives 2022 — 4ème circonscription des Français établis
+    hors de France / Dépenses déclarées — 21 906,00 € / Recettes déclarées —
+    22 088,00 € / Dons déclarés — 3 000,00 € / Apport personnel — 14 646,00 € /
+    Dépenses retenues par la CNCCFP — 21 930,00 € / Recettes retenues par la
+    CNCCFP — 22 112,00 € / Code de décision publié par la CNCCFP — ARM »,
+    identique à `silver.campaign_account`. La section « Élections et
+    résultats » rend la même circonscription pour 2022 que pour les deux tours
+    de 2024. Plus aucune mention de Paris sur cette fiche.
+
+    **Tests.** Le défaut avait survécu parce qu'aucun test ne couvrait un code
+    département non numérique dans cet adaptateur. Quatre cas ajoutés à
+    `packages/ingestion/tests/normalize-cnccfp.test.ts` (Corse, Français
+    établis hors de France, libellé de cette famille sans numéro,
+    « circonscription unique » en témoin de non-régression). Les trois premiers
+    échouent bien sur le code d'avant — `expected null to be '2A-1'`,
+    `expected '75-4' to be '099-4'`, `expected '75-1' to be null` : la
+    troisième assertion est la reproduction littérale du fait faux.
+
 13. **Homonymes exacts dans une autre circonscription : 12 cas indécidables.**
     *Relevé le 26 août 2026, même vérification.* Douze candidatures CNCCFP non
     rattachées portent la clé de nom **exacte** d'un député de la 17e
@@ -1746,6 +1832,21 @@ même agrégation, sans parcours supplémentaire.
     est précisément ce que la spec interdit de tenir pour une preuve. Aucune
     décision écrite. Trancher exigerait un fait d'identité extérieur au
     périmètre importé.
+
+14. **La suite `normalize-cnccfp` était entièrement rouge sur `main`.**
+    *Relevé et corrigé le 26 août 2026 en traitant l'écart 12.* Les 23 tests
+    du fichier échouaient tous, y compris sur un arbre propre : ils appellent
+    `normalizeCnccfp(prisma, run)` sans chemin d'arbitrages, donc contre le
+    fichier de production `data/identity-decisions.yaml`, auquel la troisième
+    vague (écart 6) venait d'ajouter cinq décisions CNCCFP visant des
+    `candidat` absents des fixtures réduites. `assertDecisionsAreResolvable`
+    les déclarait introuvables et faisait tomber le fichier entier — un
+    couplage accidentel avec le fichier de production, pas une vraie
+    régression. Le décompte « ingestion 212 » du critère d'achèvement était
+    donc périmé depuis ce commit. *Correctif : la convention déjà appliquée à
+    `normalize-resultats.test.ts` une source plus tôt (un
+    `EMPTY_DECISIONS_PATH` isolé, créé en `beforeAll`), étendue aux 27 appels
+    du fichier CNCCFP. Aucune assertion modifiée.*
 
 ---
 

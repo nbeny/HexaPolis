@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Prisma } from '@poligraph/db'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { normalizeCnccfp } from '../src/adapters/cnccfp/normalize-cnccfp.js'
 import { stageCnccfp } from '../src/adapters/cnccfp/stage-cnccfp.js'
 import { openImportRun } from '../src/run/import-run.js'
@@ -169,13 +169,17 @@ async function seedDeuxSandrineRousseauMemeCirconscription(): Promise<{ ecoId: s
 /** Les cinq circonscriptions couvertes par la fixture, dans la forme réelle
  * des codes Territory (vérifiée contre la base de développement). */
 async function seedToutesLesCirconscriptionsDeLaFixture(): Promise<void> {
-  const codes: Array<[string, string]> = [
+  await seedCirconscriptions([
     ['75-9', '9ème circonscription de Paris'],
     ['23-1', '1ère circonscription de la Creuse'],
     ['85-3', '3ème circonscription de la Vendée'],
     ['988-1', '1ère circonscription de Nouvelle-Calédonie'],
     ['01-1', "1ère circonscription de l'Ain"],
-  ]
+  ])
+}
+
+/** Crée les `Territory` nommés, dans la forme réelle des codes en base. */
+async function seedCirconscriptions(codes: Array<[string, string]>): Promise<void> {
   for (const [code, label] of codes) {
     await prisma.territory.upsert({
       where: { type_code: { type: 'CIRCONSCRIPTION', code } },
@@ -251,6 +255,35 @@ async function ecrireCsvAvecHomonymeTardif(
   await writeFile(path, lines.join('\n') + '\n', 'latin1')
 }
 
+/**
+ * Stage puis normalise un fichier CNCCFP synthétique de quelques lignes, écrit
+ * dans l'encodage du fichier réel. Chaque appel utilise sa propre ressource et
+ * son propre checksum : deux appels d'un même test sont deux imports distincts.
+ */
+async function normaliserLignesCnccfp(slug: string, lignes: string[]): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), `poligraph-cnccfp-${slug}-`))
+  const path = join(dir, `${slug}.csv`)
+  try {
+    await writeFile(path, [CNCCFP_MINIMAL_HEADER, ...lignes].join('\n') + '\n', 'latin1')
+    const runDescriptor: ResourceDescriptor = { ...descriptor, resourceExternalId: `${slug}.csv` }
+    const run = await openImportRun(prisma, runDescriptor, `c-${slug}`)
+    if (!run) throw new Error('run attendu')
+    await stageCnccfp(prisma, path, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
+
+/** Code du `Territory` rattaché à une candidature, ou `null` si aucun. */
+async function codeTerritoireDeLaCandidature(candidat: string): Promise<string | null> {
+  const candidacy = await prisma.candidacy.findFirstOrThrow({
+    where: { naturalKey: `cnccfp|${candidat}` },
+    include: { territory: true },
+  })
+  return candidacy.territory?.code ?? null
+}
+
 /** Jean Dupont, connu, avec un mandat qui suivrait l'élection dans la 1ère
  * circonscription de l'Ain — corroborant en apparence, sauf qu'un second
  * candidat du même nom s'y présente aussi (voir `ecrireCsvAvecHomonymeTardif`). */
@@ -287,18 +320,37 @@ async function seedJeanDupontAvecMandatPostElection(): Promise<string> {
   return person.id
 }
 
+// Ces tests tournent sur des fixtures réduites, pas sur le fichier réel de la
+// CNCCFP : ils doivent rester indépendants du contenu de
+// `data/identity-decisions.yaml` (chemin par défaut de `normalizeCnccfp`), qui
+// porte depuis la troisième vague d'arbitrages (plan 6, écart 6) de vraies
+// décisions CNCCFP visant des `candidat` absents de ces fixtures. Sans ce
+// chemin isolé, `assertDecisionsAreResolvable` les déclare introuvables et
+// fait échouer tout le fichier — un couplage accidentel avec le fichier de
+// production, pas une vraie régression. Même convention que
+// `normalize-resultats.test.ts`, qui a rencontré le cas une source plus tôt.
+let emptyDecisionsDir: string
+let EMPTY_DECISIONS_PATH: string
+
+beforeAll(async () => {
+  emptyDecisionsDir = await mkdtemp(join(tmpdir(), 'poligraph-cnccfp-empty-decisions-'))
+  EMPTY_DECISIONS_PATH = join(emptyDecisionsDir, 'decisions.yaml')
+  await writeFile(EMPTY_DECISIONS_PATH, 'decisions: []\n', 'utf-8')
+})
+
 beforeEach(async () => {
   await resetDatabase(prisma)
 })
 
 afterAll(async () => {
+  await rm(emptyDecisionsDir, { recursive: true, force: true })
   await prisma.$disconnect()
 })
 
 describe('normalizeCnccfp', () => {
   it('rejette la ligne corrompue avec trace, sans l’ignorer silencieusement', async () => {
     const run = await stageCnccfpFixture('c1')
-    const report = await normalizeCnccfp(prisma, run)
+    const report = await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(report.rejected).toBe(1)
 
@@ -310,7 +362,7 @@ describe('normalizeCnccfp', () => {
 
   it('crée une Candidacy et un CampaignAccount pour chacune des 10 lignes exploitables', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.candidacy.count()).toBe(10)
     expect(await prisma.campaignAccount.count()).toBe(10)
@@ -318,7 +370,7 @@ describe('normalizeCnccfp', () => {
 
   it('rattache chaque candidature à l’élection législative 2022, une seule fois', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.election.count()).toBe(1)
     const election = await prisma.election.findFirstOrThrow()
@@ -330,7 +382,7 @@ describe('normalizeCnccfp', () => {
 
   it('porte la nuance sur la candidature', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const breton = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
     expect(breton.nuance).toBe('LR')
@@ -338,7 +390,7 @@ describe('normalizeCnccfp', () => {
 
   it('conserve la devise telle quelle : deux comptes en CFP, huit en EURO', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const accounts = await prisma.campaignAccount.findMany()
     expect(accounts.filter((a) => a.currency === 'CFP')).toHaveLength(2)
@@ -347,7 +399,7 @@ describe('normalizeCnccfp', () => {
 
   it('aucun agrégat ne mélange les devises : les totaux par devise restent distincts et corrects', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const accounts = await prisma.campaignAccount.findMany()
     // La devise est portée par chaque compte (colonne non nullable en base :
@@ -371,7 +423,7 @@ describe('normalizeCnccfp', () => {
 
   it('les montants sont des Decimal : « - » et vide deviennent null, jamais 0', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     // Rousseau DVD : tous les montants valent « - » dans le fichier.
     const rousseauDvd = await prisma.campaignAccount.findFirstOrThrow({
@@ -383,7 +435,7 @@ describe('normalizeCnccfp', () => {
 
   it('un montant déclaré à zéro reste 0, distinct d’un montant absent', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     // Moreau (Vendée, DVD) déclare explicitement 0 partout.
     const moreauVendee = await prisma.candidacy.findFirstOrThrow({
@@ -397,7 +449,7 @@ describe('normalizeCnccfp', () => {
   it('ne fusionne JAMAIS les deux Sandrine Rousseau : AMBIGUOUS, personId null, deux IdentityMatch en attente', async () => {
     await seedDeuxSandrineRousseauMemeCirconscription()
     const run = await stageCnccfpFixture('c1')
-    const report = await normalizeCnccfp(prisma, run)
+    const report = await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const candidacies = await prisma.candidacy.findMany({
       where: { naturalKey: { in: [`cnccfp|${ROUSSEAU_ECO}`, `cnccfp|${ROUSSEAU_DVD}`] } },
@@ -417,7 +469,7 @@ describe('normalizeCnccfp', () => {
   it('Xavier Breton, connu sans date de naissance, n’est rapproché qu’en PROBABLE — jamais fusionné automatiquement', async () => {
     const bretonId = await seedXavierBretonSansDateNaissance()
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
     expect(match.confidence).toBe('PROBABLE')
@@ -432,7 +484,7 @@ describe('normalizeCnccfp', () => {
 
   it('le compte de campagne s’accroche à la Candidacy, jamais directement à la personne', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const account = await prisma.campaignAccount.findFirstOrThrow({
       where: { candidacy: { naturalKey: `cnccfp|${BRETON}` } },
@@ -447,7 +499,7 @@ describe('normalizeCnccfp', () => {
   it('rattache le territoire quand la circonscription se résout : 10 candidatures sur 10 quand les circonscriptions sont connues', async () => {
     await seedToutesLesCirconscriptionsDeLaFixture()
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const candidacies = await prisma.candidacy.findMany()
     expect(candidacies).toHaveLength(10)
@@ -457,7 +509,7 @@ describe('normalizeCnccfp', () => {
   it('laisse territoryId à null quand la circonscription ne correspond à aucun Territory connu, sans en inventer un', async () => {
     // Aucune circonscription n'est seedée ici : aucune ne peut se résoudre.
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const candidacies = await prisma.candidacy.findMany()
     expect(candidacies).toHaveLength(10)
@@ -482,7 +534,7 @@ describe('normalizeCnccfp', () => {
       if (!run) throw new Error('run attendu')
       await stageCnccfp(prisma, path, run)
 
-      const report = await normalizeCnccfp(prisma, run)
+      const report = await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
       expect(report.rejected).toBe(1)
       expect(await prisma.campaignAccount.count()).toBe(0)
@@ -497,7 +549,7 @@ describe('normalizeCnccfp', () => {
 
   it('est idempotent : rejouer la normalisation ne crée rien de plus', async () => {
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const counts = {
       candidacy: await prisma.candidacy.count(),
@@ -506,7 +558,7 @@ describe('normalizeCnccfp', () => {
       identityMatch: await prisma.identityMatch.count(),
     }
 
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     expect(await prisma.candidacy.count()).toBe(counts.candidacy)
     expect(await prisma.campaignAccount.count()).toBe(counts.campaignAccount)
@@ -515,11 +567,118 @@ describe('normalizeCnccfp', () => {
   })
 })
 
+describe('normalizeCnccfp — dérivation du code circonscription (écart 12)', () => {
+  it('Corse : les codes département « 20A » / « 20B » publiés se rattachent aux Territory « 2A » / « 2B »', async () => {
+    await seedCirconscriptions([
+      ['2A-1', '1ère circonscription de la Corse-du-Sud'],
+      ['2A-2', '2ème circonscription de la Corse-du-Sud'],
+      ['2B-1', '1ère circonscription de la Haute-Corse'],
+      ['2B-2', '2ème circonscription de la Haute-Corse'],
+    ])
+
+    await normaliserLignesCnccfp('corse', [
+      cnccfpRow({
+        candidat: 'CORSE-A1',
+        nom: 'M. MARCANGELI Laurent',
+        circonscription: 'Corse-du-Sud - 1re circonscription',
+        departement: 'Corse du Sud',
+        codeDepartement: '20A',
+      }),
+      cnccfpRow({
+        candidat: 'CORSE-B2',
+        nom: 'M. CECCOLI Francois-Xavier',
+        circonscription: 'Haute-Corse - 2e circonscription',
+        departement: 'Haute-Corse',
+        codeDepartement: '20B',
+      }),
+    ])
+
+    expect(await codeTerritoireDeLaCandidature('CORSE-A1')).toBe('2A-1')
+    expect(await codeTerritoireDeLaCandidature('CORSE-B2')).toBe('2B-2')
+  })
+
+  it('Français établis hors de France : le numéro vient du libellé, jamais du département de dépôt', async () => {
+    // Les deux circonscriptions existent en base : celle de Paris que le code
+    // département publié désignerait à tort (« 75 », le lieu de dépôt du
+    // compte) et la vraie. Sans les deux, le test passerait pour la mauvaise
+    // raison — un simple `territoryId` à null suffirait à le satisfaire.
+    await seedCirconscriptions([
+      ['75-4', '4ème circonscription de Paris'],
+      ['099-4', '4ème circonscription des Français établis hors de France'],
+    ])
+
+    await normaliserLignesCnccfp('hors-de-france', [
+      cnccfpRow({
+        candidat: 'FE-4',
+        nom: 'M. ANGLADE Pieyre-Alexandre',
+        circonscription: 'Français établis hors de France - 4ème circonscription',
+        departement: 'Paris',
+        codeDepartement: '75',
+      }),
+    ])
+
+    expect(await codeTerritoireDeLaCandidature('FE-4')).toBe('099-4')
+  })
+
+  it('un libellé « Français établis hors de France » sans numéro ne rattache rien, plutôt que de deviner', async () => {
+    // Aucune de ces onze circonscriptions n'est « unique » : le repli qui
+    // numérote 1 une « circonscription unique » désignerait la 1ère au hasard,
+    // et le code département publié (« 75 ») désignerait Paris. Les deux
+    // territoires sont seedés pour qu'un rattachement erroné soit visible.
+    await seedCirconscriptions([
+      ['75-1', '1ère circonscription de Paris'],
+      ['099-1', '1ère circonscription des Français établis hors de France'],
+    ])
+
+    await normaliserLignesCnccfp('hors-de-france-sans-numero', [
+      cnccfpRow({
+        candidat: 'FE-SANS-NUMERO',
+        nom: 'Mme TEMOIN Sans-Numero',
+        circonscription: 'Français établis hors de France - Circonscription unique',
+        departement: 'Paris',
+        codeDepartement: '75',
+      }),
+    ])
+
+    // Le compte de campagne, lui, existe bel et bien : un territoire
+    // indéterminé n'efface pas le fait publié.
+    expect(await codeTerritoireDeLaCandidature('FE-SANS-NUMERO')).toBeNull()
+    expect(await prisma.campaignAccount.count()).toBe(1)
+  })
+
+  it('« Circonscription unique » reste numérotée 1 hors des Français de l’étranger', async () => {
+    await seedCirconscriptions([
+      ['975-1', 'Circonscription unique de Saint-Pierre-et-Miquelon'],
+      ['23-1', '1ère circonscription de la Creuse'],
+    ])
+
+    await normaliserLignesCnccfp('circonscription-unique', [
+      cnccfpRow({
+        candidat: 'SPM-1',
+        nom: 'M. TEMOIN Saint-Pierre',
+        circonscription: 'Saint-Pierre-et-Miquelon - Circonscription unique',
+        departement: 'Saint Pierre et Miquelon',
+        codeDepartement: '975',
+      }),
+      cnccfpRow({
+        candidat: 'CREUSE-1',
+        nom: 'Mme TEMOIN Creuse',
+        circonscription: 'Creuse - Circonscription unique',
+        departement: 'Creuse',
+        codeDepartement: '23',
+      }),
+    ])
+
+    expect(await codeTerritoireDeLaCandidature('SPM-1')).toBe('975-1')
+    expect(await codeTerritoireDeLaCandidature('CREUSE-1')).toBe('23-1')
+  })
+})
+
 describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
   it('Xavier Breton, mandat au 2022-06-22 dans 01-1, résout CONFIRMED et sa candidature est rattachée', async () => {
     const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
     expect(match.confidence).toBe('CONFIRMED')
@@ -549,7 +708,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
 
     const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const election = await prisma.election.findUniqueOrThrow({ where: { naturalKey: 'legislatives-2022' } })
     expect(election.secondRoundDate).not.toBeNull()
@@ -565,7 +724,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
   it('les deux Sandrine Rousseau restent non rattachées malgré des mandats post-élection : uniqueInDistrict est faux pour les deux', async () => {
     await seedDeuxSandrineRousseauMemeCirconscription()
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const candidacies = await prisma.candidacy.findMany({
       where: { naturalKey: { in: [`cnccfp|${ROUSSEAU_ECO}`, `cnccfp|${ROUSSEAU_DVD}`] } },
@@ -583,7 +742,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
   it('un mandat antérieur à l’élection ne corrobore pas : le candidat reste PROBABLE, non rattaché', async () => {
     const bretonId = await seedXavierBretonAvecMandat('2017-06-21')
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
     expect(match.confidence).toBe('PROBABLE')
@@ -597,7 +756,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
   it('un mandat démarrant le jour même de l’élection corrobore (>=, pas >)', async () => {
     const bretonId = await seedXavierBretonAvecMandat('2022-06-19')
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const match = await prisma.identityMatch.findFirstOrThrow({ where: { sourceId: 'CNCCFP', sourceKey: BRETON } })
     expect(match.confidence).toBe('CONFIRMED')
@@ -628,7 +787,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
       if (!run) throw new Error('run attendu')
       await stageCnccfp(prisma, path, run)
 
-      await normalizeCnccfp(prisma, run)
+      await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
       // Le premier candidat (ligne 2) ne doit JAMAIS être confirmé : un
       // deuxième homonyme dans la même circonscription apparaît 500 lignes
@@ -656,12 +815,12 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
   it('est idempotent pour un rapprochement CONFIRMED : rejouer ne change ni le verdict ni le rattachement', async () => {
     const bretonId = await seedXavierBretonAvecMandat('2022-06-22')
     const run = await stageCnccfpFixture('c1')
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const before = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
     expect(before.personId).toBe(bretonId)
 
-    await normalizeCnccfp(prisma, run)
+    await normalizeCnccfp(prisma, run, EMPTY_DECISIONS_PATH)
 
     const after = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${BRETON}` } })
     expect(after.personId).toBe(bretonId)
@@ -699,7 +858,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
       const run1 = await openImportRun(prisma, run1Descriptor, 'c-downgrade-1')
       if (!run1) throw new Error('run attendu')
       await stageCnccfp(prisma, seul, run1)
-      await normalizeCnccfp(prisma, run1)
+      await normalizeCnccfp(prisma, run1, EMPTY_DECISIONS_PATH)
 
       const avant = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${JD}` } })
       expect(avant.personId).toBe(dupontId)
@@ -738,7 +897,7 @@ describe('normalizeCnccfp — niveau élection puis mandat (Task 2)', () => {
       const run2 = await openImportRun(prisma, run2Descriptor, 'c-downgrade-2')
       if (!run2) throw new Error('run attendu')
       await stageCnccfp(prisma, avecHomonyme, run2)
-      await normalizeCnccfp(prisma, run2)
+      await normalizeCnccfp(prisma, run2, EMPTY_DECISIONS_PATH)
 
       const apres = await prisma.candidacy.findFirstOrThrow({ where: { naturalKey: `cnccfp|${JD}` } })
       expect(apres.personId).toBeNull()

@@ -24,26 +24,76 @@ const DEFAULT_DECISIONS_PATH = fileURLToPath(
 )
 
 /**
+ * Alias de code département mesurés sur le fichier réel de la CNCCFP (au-delà
+ * du zéro manquant traité par `normalizeDepartmentCode`) : la commission
+ * publie la Corse sous les codes `20A` / `20B`, qui ne correspondent à aucun
+ * code `Territory` en base — celle-ci porte les codes INSEE `2A` / `2B`, les
+ * mêmes que l'Assemblée nationale (plan 1) et que le RNE (plan 3). Sans cet
+ * alias, `20A-1` ne se rattache jamais, sans lever la moindre erreur :
+ * `territoryId` reste simplement `null` (43 lignes bronze, mesuré sur l'import
+ * réel — les 43 seules candidatures de 2022 sans territoire).
+ *
+ * Même intention que `DEPARTMENT_CODE_ALIASES` de
+ * `adapters/resultats/normalize-resultats.ts`, qui traite l'équivalent pour le
+ * ministère de l'Intérieur (`ZZ` → `099`, `ZX` → `977`). Les codes cibles sont
+ * délibérément identiques d'une source à l'autre : deux sources qui décriraient
+ * la même circonscription sous deux codes différents se contrediraient.
+ */
+const DEPARTMENT_CODE_ALIASES: Record<string, string> = {
+  '20A': '2A', // Corse-du-Sud (23 lignes)
+  '20B': '2B', // Haute-Corse (20 lignes)
+}
+
+/**
+ * Code département des `Territory` des Français établis hors de France, le
+ * même que celui posé par l'import des résultats du ministère de l'Intérieur
+ * (`ZZ` → `099`) et par l'import de l'Assemblée nationale.
+ */
+const FRANCAIS_ETRANGER_DEPARTMENT_CODE = '099'
+
+/**
+ * Les onze circonscriptions des Français établis hors de France sont publiées
+ * par la CNCCFP sous `code département = 75` et `département = « Paris »` —
+ * le lieu de dépôt du compte, pas le territoire représenté (149 lignes bronze,
+ * mesuré sur l'import réel). Le seul endroit où figure la circonscription
+ * réelle est le libellé, d'où cette reconnaissance sur le texte : la dériver du
+ * code département produirait `75-N`, **une vraie circonscription de Paris**,
+ * c'est-à-dire une affirmation fausse et vraisemblable attachée à une personne
+ * nommée, bien pire qu'une absence.
+ */
+const FRANCAIS_ETRANGER_LABEL = /fran[çc]ais\s+[ée]tablis\s+hors\s+de\s+france/i
+
+/**
  * Le `code département` de la CNCCFP omet le zéro initial pour les
  * départements à un chiffre (« 1 » pour l'Ain), contrairement à la forme des
  * codes `Territory` en base (« 01 »). Les codes à trois chiffres (outre-mer,
  * ex. « 988 ») n'ont jamais besoin de ce complément.
  */
 function normalizeDepartmentCode(raw: string): string {
-  return /^\d$/.test(raw) ? raw.padStart(2, '0') : raw
+  const aliased = DEPARTMENT_CODE_ALIASES[raw] ?? raw
+  return /^\d$/.test(aliased) ? aliased.padStart(2, '0') : aliased
+}
+
+/**
+ * Extrait le numéro d'ordre explicitement écrit dans le libellé publié
+ * (« Paris - 9e circonscription », « Ain - 1re circonscription »). Rend `null`
+ * si aucun numéro n'y figure : c'est le seul verdict honnête quand la source
+ * ne dit pas de quelle circonscription elle parle.
+ */
+function parseNumberedCirconscription(raw: string): number | null {
+  const match = raw.match(/(\d+)\s*(?:re|ère|ème|e)?\s*circonscription/i)
+  return match?.[1] ? Number(match[1]) : null
 }
 
 /**
  * Extrait le numéro d'ordre de la circonscription depuis le texte libre
- * publié (« Paris - 9e circonscription », « Ain - 1re circonscription »).
- * Une « circonscription unique » (département à un seul siège, ex. la
- * Creuse) est numérotée 1, la convention observée dans les codes Territory
- * déjà en base.
+ * publié. Une « circonscription unique » (département à un seul siège, ex. la
+ * Creuse, Saint-Pierre-et-Miquelon, Wallis-et-Futuna) est numérotée 1, la
+ * convention observée dans les codes Territory déjà en base.
  */
 function parseCirconscriptionOrdinal(raw: string): number | null {
   if (/circonscription unique/i.test(raw)) return 1
-  const match = raw.match(/(\d+)\s*(?:re|ère|ème|e)?\s*circonscription/i)
-  return match?.[1] ? Number(match[1]) : null
+  return parseNumberedCirconscription(raw)
 }
 
 /**
@@ -51,9 +101,22 @@ function parseCirconscriptionOrdinal(raw: string): number | null {
  * circonscription en texte libre publiés par la CNCCFP. Ne matche que des
  * `Territory` déjà en base — créés par l'import AN — et n'en invente jamais :
  * une circonscription non reconnue laisse `territoryId` à `null`.
+ *
+ * Les Français établis hors de France sont le seul cas où le libellé prime sur
+ * le code département publié (voir `FRANCAIS_ETRANGER_LABEL`). Le numéro y est
+ * exigé explicitement : le repli « circonscription unique » n'y a aucun sens
+ * (elles sont onze) et rendrait la 1ère au hasard. Un libellé de cette famille
+ * sans numéro rend donc `null` — une absence consignée, jamais une supposition.
  */
 function districtCodeFromRow(codeDepartement: string | null, circonscription: string | null): string | null {
-  if (!codeDepartement || !circonscription) return null
+  if (!circonscription) return null
+
+  if (FRANCAIS_ETRANGER_LABEL.test(circonscription)) {
+    const ordinal = parseNumberedCirconscription(circonscription)
+    return ordinal === null ? null : `${FRANCAIS_ETRANGER_DEPARTMENT_CODE}-${ordinal}`
+  }
+
+  if (!codeDepartement) return null
   const ordinal = parseCirconscriptionOrdinal(circonscription)
   if (ordinal === null) return null
   return `${normalizeDepartmentCode(codeDepartement)}-${ordinal}`
