@@ -8,8 +8,15 @@
     "build": "turbo run build",
     "test": "turbo run test --concurrency=1",
     "typecheck": "turbo run typecheck",
-    "db:up": "docker compose up -d",
-    "db:migrate": "pnpm --filter @poligraph/db exec prisma migrate dev"
+    "build:seq": "pnpm -r --workspace-concurrency=1 run build",
+    "test:seq": "pnpm -r --workspace-concurrency=1 run test",
+    "typecheck:seq": "pnpm -r --workspace-concurrency=1 run typecheck",
+    "stack:up": "docker compose up -d",
+    "stack:down": "docker compose down",
+    "stack:logs": "docker compose logs -f",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "node scripts/with-env.mjs pnpm --filter @poligraph/db exec prisma migrate dev",
+    "db:status": "node scripts/with-env.mjs pnpm --filter @poligraph/db exec prisma migrate status"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

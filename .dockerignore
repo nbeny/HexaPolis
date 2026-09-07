@@ -1,0 +1,5 @@
+# Le contexte de build ne sert qu'à copier docker/dev-entrypoint.sh : tout le
+# reste est monté en volume au démarrage. On l'exclut pour ne pas envoyer des
+# centaines de mégaoctets au démon à chaque `docker compose build`.
+*
+!docker/dev-entrypoint.sh
