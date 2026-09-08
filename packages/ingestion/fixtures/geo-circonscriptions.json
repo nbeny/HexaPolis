@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature",
+      "properties": { "codeDepartement": "01", "nomDepartement": "Ain", "codeCirconscription": "0104", "nomCirconscription": "4ème circonscription" },
+      "geometry": { "type": "Polygon", "coordinates": [[[5.0, 46.0], [5.1, 46.0], [5.1, 46.1], [5.0, 46.0]]] } },
+    { "type": "Feature",
+      "properties": { "codeDepartement": "2A", "nomDepartement": "Corse-du-Sud", "codeCirconscription": "2A01", "nomCirconscription": "1ère circonscription" },
+      "geometry": { "type": "Polygon", "coordinates": [[[8.7, 41.9], [8.8, 41.9], [8.8, 42.0], [8.7, 41.9]]] } },
+    { "type": "Feature",
+      "properties": { "codeDepartement": "ZD", "nomDepartement": "La Réunion", "codeCirconscription": "ZD07", "nomCirconscription": "7ème circonscription" },
+      "geometry": { "type": "Polygon", "coordinates": [[[55.4, -21.0], [55.5, -21.0], [55.5, -20.9], [55.4, -21.0]]] } },
+    { "type": "Feature",
+      "properties": { "codeDepartement": "93", "nomDepartement": "Seine-Saint-Denis", "codeCirconscription": "9310", "nomCirconscription": "10ème circonscription" },
+      "geometry": { "type": "Polygon", "coordinates": [[[2.4, 48.9], [2.5, 48.9], [2.5, 49.0], [2.4, 48.9]]] } },
+    { "type": "Feature",
+      "properties": { "codeDepartement": "75", "nomDepartement": "Paris", "codeCirconscription": "7506", "nomCirconscription": "6ème circonscription" },
+      "geometry": { "type": "MultiPolygon", "coordinates": [[[[2.3, 48.85], [2.35, 48.85], [2.35, 48.87], [2.3, 48.85]]]] } },
+    { "type": "Feature",
+      "properties": { "codeDepartement": "99", "nomDepartement": "Inconnu", "codeCirconscription": "", "nomCirconscription": "" },
+      "geometry": { "type": "Polygon", "coordinates": [[[0.0, 0.0], [0.1, 0.0], [0.1, 0.1], [0.0, 0.0]]] } }
+  ]
+}

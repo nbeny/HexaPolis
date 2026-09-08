@@ -12,7 +12,7 @@ export function testPrisma(): PrismaClient {
  */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE bronze.an_acteur_raw, bronze.an_mandat_raw, bronze.an_organe_raw, bronze.an_scrutin_raw, bronze.an_position_raw, bronze.rne_elu_raw, bronze.cnccfp_compte_raw, bronze.election_result_raw RESTART IDENTITY CASCADE',
+    'TRUNCATE bronze.an_acteur_raw, bronze.an_mandat_raw, bronze.an_organe_raw, bronze.an_scrutin_raw, bronze.an_position_raw, bronze.rne_elu_raw, bronze.cnccfp_compte_raw, bronze.election_result_raw, bronze.geo_circonscription_raw RESTART IDENTITY CASCADE',
   )
   await prisma.$executeRawUnsafe(
     'TRUNCATE silver.import_rejection, silver.import_run, silver.dataset_resource, silver.dataset, silver.source RESTART IDENTITY CASCADE',

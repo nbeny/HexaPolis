@@ -7,6 +7,7 @@ import {
   RneAdapter,
   CnccfpAdapter,
   ResultatsAdapter,
+  GeoAdapter,
   SourceFileClient,
   LEGISLATURES_DISPONIBLES,
   openImportRun,
@@ -25,7 +26,14 @@ interface ImportCommandOptions {
   legislature?: number[]
 }
 
-const TARGETS = ['an:acteurs', 'an:scrutins', 'rne:deputes', 'cnccfp:comptes', 'resultats:legislatives'] as const
+const TARGETS = [
+  'an:acteurs',
+  'an:scrutins',
+  'rne:deputes',
+  'cnccfp:comptes',
+  'resultats:legislatives',
+  'geo:circonscriptions',
+] as const
 
 interface Report {
   staged: number
@@ -125,6 +133,9 @@ export class ImportCommand extends CommandRunner {
     }
     if (target === 'resultats:legislatives') {
       return new ResultatsAdapter(prisma, new SourceFileClient('.data/resultats'))
+    }
+    if (target === 'geo:circonscriptions') {
+      return new GeoAdapter(prisma, new SourceFileClient('.data/geo'))
     }
 
     const client = new SourceFileClient('.data/an')
