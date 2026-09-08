@@ -85,10 +85,18 @@ export class DeputyResolver {
     departmentCode: string | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
-    @Args('before', { type: () => String, nullable: true }) before: string | null | undefined,
+    @Args('before', {
+      type: () => String,
+      nullable: true,
+      description:
+        'Position AVANT la page courante — le `pageInfo.startCursor` de cette page, ' +
+        'pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. ' +
+        'Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).',
+    })
+    before: string | null | undefined,
   ): Promise<InstanceType<typeof DeputyConnection>> {
     const limit = clampPageSize(optionalArg(first))
-    const offset = resolveOffset(optionalArg(after), optionalArg(before), limit)
+    const offset = resolveOffset({ after: optionalArg(after), before: optionalArg(before), pageSize: limit })
     const { rows, totalCount } = await this.goldRepository.listCards(
       {
         legislature: optionalArg(legislature),
@@ -157,10 +165,18 @@ export class DeputyResolver {
     @Args('legislature', { type: () => Int, nullable: true }) legislature: number | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
-    @Args('before', { type: () => String, nullable: true }) before: string | null | undefined,
+    @Args('before', {
+      type: () => String,
+      nullable: true,
+      description:
+        'Position AVANT la page courante — le `pageInfo.startCursor` de cette page, ' +
+        'pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. ' +
+        'Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).',
+    })
+    before: string | null | undefined,
   ): Promise<InstanceType<typeof BallotPositionConnection>> {
     const limit = clampPageSize(optionalArg(first))
-    const offset = resolveOffset(optionalArg(after), optionalArg(before), limit)
+    const offset = resolveOffset({ after: optionalArg(after), before: optionalArg(before), pageSize: limit })
     const { rows, totalCount } = await this.goldRepository.listVotes(
       deputy.id,
       optionalArg(legislature),

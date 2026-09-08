@@ -73,7 +73,16 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 scalar DateTime
 
 type Deputy {
-  ballotPositions(after: String, before: String, first: Int, legislature: Int): BallotPositionConnection!
+  ballotPositions(
+    after: String
+
+    """
+    Position AVANT la page courante — le `pageInfo.startCursor` de cette page, pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).
+    """
+    before: String
+    first: Int
+    legislature: Int
+  ): BallotPositionConnection!
   birthDate: DateTime
   candidacies: [Candidacy!]!
   civility: String
@@ -148,7 +157,18 @@ type ProvenanceRecord {
 }
 
 type Query {
-  deputies(after: String, before: String, departmentCode: String, first: Int, groupId: ID, legislature: Int): DeputyConnection!
+  deputies(
+    after: String
+
+    """
+    Position AVANT la page courante — le `pageInfo.startCursor` de cette page, pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).
+    """
+    before: String
+    departmentCode: String
+    first: Int
+    groupId: ID
+    legislature: Int
+  ): DeputyConnection!
   deputy(slug: String!): Deputy
   provenance(entityId: ID!, entityType: String!, field: String): [ProvenanceRecord!]!
   search(first: Int, query: String!): [SearchHit!]!
