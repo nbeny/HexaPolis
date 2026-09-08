@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import type { DeputiesQuery, DeputiesQueryVariables } from '@/gql/generated'
+import type { DeputiesQuery } from '@/gql/generated'
 import {
   CURRENT_LEGISLATURE,
-  PAGE_SIZE,
   buildListHref,
   hasActiveFilters,
   isPastLastPage,
+  listVariables,
   readListParams,
   type DeputyListParams,
   type RawSearchParams,
@@ -23,35 +23,6 @@ export const metadata: Metadata = {
 }
 
 type DeputyRow = NonNullable<DeputiesQuery['deputies']['edges'][number]>['node']
-
-/**
- * Un filtre inactif est *omis* des variables, jamais envoyé à `null`.
- *
- * En GraphQL, une variable absente laisse l'argument non fourni, tandis qu'un
- * `null` explicite est une valeur transmise. La nuance n'est pas théorique :
- * l'API décide qu'un filtre de législature est actif en testant
- * `legislature !== undefined` (`GoldRepository.listCards`), si bien qu'un
- * `legislature: null` explicite lui fait rendre `totalCount: 0` — une liste
- * vide, sans erreur, alors que 567 députés existent. Omettre exprime aussi
- * plus fidèlement l'intention : « pas de filtre » n'est pas « filtre à null ».
- */
-function listVariables(params: DeputyListParams): Partial<DeputiesQueryVariables> {
-  return {
-    ...(params.legislature !== null && { legislature: params.legislature }),
-    ...(params.groupId !== null && { groupId: params.groupId }),
-    ...(params.departmentCode !== null && { departmentCode: params.departmentCode }),
-    // `after` et `before` s'excluent côté API : les fournir ensemble est
-    // rejeté en BAD_USER_INPUT. Nos propres liens n'émettent jamais les deux
-    // à la fois (voir `buildListHref`), mais une URL bricolée à la main le
-    // pourrait — `after` l'emporte alors, par cohérence avec `buildListHref`.
-    ...(params.after !== null
-      ? { after: params.after }
-      : params.before !== null
-        ? { before: params.before }
-        : {}),
-    first: PAGE_SIZE,
-  }
-}
 
 /**
  * Aucun `try`/`catch` : une panne de l'API doit remonter en page d'erreur.
@@ -225,13 +196,14 @@ export default async function DeputiesPage({
     connection.pageInfo.hasPreviousPage && connection.pageInfo.startCursor !== null
       ? buildListHref(params, { after: null, before: connection.pageInfo.startCursor })
       : null
-  // Une page peut désormais être atteinte par `after` ou par `before` : le
-  // lien « première page » doit s'afficher dans les deux cas, pas seulement
-  // quand on est arrivé en avançant.
-  const firstPageHref =
-    params.after === null && params.before === null
-      ? null
-      : buildListHref(params, { after: null, before: null })
+  // Piloté par `pageInfo.hasPreviousPage`, pas par les paramètres d'URL :
+  // `hasPreviousPage` vaut exactement `offset > 0`, c'est-à-dire « je ne suis
+  // pas sur la première page », ce que l'API seule sait trancher. Un
+  // `params.after === null` ne le disait pas : `?after=b2Zmc2V0OjA=` (offset
+  // 0) est déjà la première page, et pourtant `after` y est non nul.
+  const firstPageHref = connection.pageInfo.hasPreviousPage
+    ? buildListHref(params, { after: null, before: null })
+    : null
   const pastLastPage = isPastLastPage(params, rows.length, connection.totalCount)
 
   return (
