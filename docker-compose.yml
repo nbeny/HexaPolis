@@ -1,3 +1,40 @@
+# Stack de développement HexaPolis. Tous les ports publiés tiennent dans la
+# plage réservée au projet, à partir de 30000 :
+#
+#   30000 → web      (Next.js, 3100 dans le conteneur)
+#   30001 → api      (GraphQL, 4000 dans le conteneur)
+#   30002 → postgres (5432 dans le conteneur)
+#
+# Le nom de projet est figé : il préfixe les volumes, et `hexapolis` est celui
+# sous lequel le volume de données existant a été créé.
+name: hexapolis
+
+# Le monorepo est monté tel quel — c'est la source du rechargement à chaud —
+# puis chaque node_modules et chaque dist est masqué par un volume nommé, pour
+# que les dépendances Linux du conteneur ne se mélangent jamais à celles,
+# win32, installées sur l'hôte. Voir docker/dev.Dockerfile.
+x-dev-volumes: &dev-volumes
+  - .:/app
+  - node-modules-root:/app/node_modules
+  - node-modules-api:/app/apps/api/node_modules
+  - node-modules-web:/app/apps/web/node_modules
+  - node-modules-db:/app/packages/db/node_modules
+  - node-modules-domain:/app/packages/domain/node_modules
+  - node-modules-ingestion:/app/packages/ingestion/node_modules
+  - dist-api:/app/apps/api/dist
+  - dist-db:/app/packages/db/dist
+  - dist-domain:/app/packages/domain/dist
+  - dist-ingestion:/app/packages/ingestion/dist
+  - next-cache:/app/apps/web/.next
+  - pnpm-store:/root/.local/share/pnpm/store
+
+# Les bind mounts de Docker Desktop ne propagent pas les événements inotify
+# depuis l'hôte Windows : sans scrutation, ni `tsx watch` ni le watcher de Next
+# ne voient les fichiers modifiés dans l'éditeur.
+x-dev-environment: &dev-environment
+  CHOKIDAR_USEPOLLING: 'true'
+  WATCHPACK_POLLING: 'true'
+
 services:
   postgres:
     image: postgres:16
@@ -7,9 +44,102 @@ services:
       POSTGRES_PASSWORD: poligraph
       POSTGRES_DB: poligraph
     ports:
-      - "5433:5432"
+      - '30002:5432'
     volumes:
       - poligraph-pgdata:/var/lib/postgresql/data
+      # Crée poligraph_test, la base partagée par les suites d'ingestion. Le
+      # script n'est rejoué que sur un volume vierge.
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U poligraph -d poligraph']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    container_name: poligraph-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *dev-environment
+      # `process.loadEnvFile` (apps/api/src/main.ts) ne remplace jamais une
+      # variable déjà définie — vérifié : une valeur venant de l'environnement
+      # l'emporte sur le fichier. Ces deux URL priment donc sur le .env racine
+      # monté avec le code, qui pointe vers 127.0.0.1 et n'a aucun sens ici.
+      DATABASE_URL: postgresql://poligraph:poligraph@postgres:5432/poligraph?schema=public
+      DATABASE_URL_TEST: postgresql://poligraph:poligraph@postgres:5432/poligraph_test?schema=public
+      PORT: '4000'
+      BUILD_WORKSPACE_LIBS: '1'
+      CORS_ALLOWED_ORIGINS: http://localhost:30000
+    ports:
+      - '30001:4000'
+    volumes: *dev-volumes
+    command: /app/docker/dev-api.sh
+    # Une vérification TCP, pas une requête GraphQL : elle suffit à ce dont
+    # `web` a besoin (l'API écoute) et ne consomme pas le quota du
+    # ThrottlerModule, réglé à 120 requêtes par minute et par IP.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - require('node:net').connect(4000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      # Le premier démarrage installe les dépendances et construit trois
+      # paquets : plusieurs minutes, sans que le conteneur soit en panne.
+      start_period: 600s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    container_name: poligraph-web
+    # `web` partage les volumes de dépendances avec `api`. Attendre que l'API
+    # soit saine, c'est aussi garantir que son `pnpm install` est terminé :
+    # celui de `web` n'a alors plus rien à faire, et les deux ne se marchent
+    # jamais dessus sur le même node_modules.
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      <<: *dev-environment
+      # Lu par apps/web/src/lib/graphql-fetch.ts. Les pages sont rendues côté
+      # serveur et ne re-requêtent jamais depuis le navigateur : l'URL est
+      # résolue dans le réseau compose, le nom de service suffit donc.
+      POLIGRAPH_API_URL: http://api:4000/graphql
+      NEXT_PUBLIC_POLIGRAPH_API_URL: http://localhost:30001/graphql
+    ports:
+      - '30000:3100'
+    volumes: *dev-volumes
+    command: pnpm --filter @poligraph/web exec next dev --port 3100 --hostname 0.0.0.0
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - require('node:net').connect(3100,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+
 volumes:
   poligraph-pgdata:
+  node-modules-root:
+  node-modules-api:
+  node-modules-web:
+  node-modules-db:
+  node-modules-domain:
+  node-modules-ingestion:
+  dist-api:
+  dist-db:
+  dist-domain:
+  dist-ingestion:
+  next-cache:
+  pnpm-store:

@@ -1,9 +1,34 @@
+# --- Sorties de build et dépendances ---
 node_modules/
 dist/
-.turbo/
-.data/
-.env
-*.log
 .next/
+.turbo/
 next-env.d.ts
 *.tsbuildinfo
+
+# Magasin pnpm. pnpm le place normalement hors du dépôt (répertoire personnel
+# ou racine du disque), mais il retombe sur la racine du projet quand il ne
+# parvient pas à résoudre HOME — c'est arrivé ici, avec 810 Mo apparus à la
+# racine. La règle est là pour que ça ne finisse jamais dans un commit.
+.pnpm-store/
+
+# Répertoire de travail du CLI d'import (apps/api/.data).
+.data/
+
+# --- Secrets ---
+# `.env` porte les identifiants de la base. `.env.example` est le seul fichier
+# d'environnement versionné : il ne contient que des valeurs de développement.
+.env
+.env.*
+!.env.example
+
+# --- Docker ---
+# Surcharges locales de la stack compose : chacun y règle ses ports ou ses
+# montages sans que ça parte dans le dépôt.
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# --- Divers ---
+*.log
+Thumbs.db
+.DS_Store

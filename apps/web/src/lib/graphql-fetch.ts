@@ -23,7 +23,8 @@ export interface GraphqlFetchOptions {
   revalidate?: number
 }
 
-export class GraphqlError extends Error {}
+import { GraphqlError } from './graphql-error'
+export { GraphqlError }
 
 export async function graphqlFetch<T>(
   query: string,

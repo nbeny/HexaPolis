@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import type { DeputiesQuery, DeputiesQueryVariables } from '@/gql/generated'
+import type { DeputiesQuery } from '@/gql/generated'
 import {
   CURRENT_LEGISLATURE,
-  PAGE_SIZE,
   buildListHref,
   hasActiveFilters,
   isPastLastPage,
+  listVariables,
   readListParams,
   type DeputyListParams,
   type RawSearchParams,
@@ -23,27 +23,6 @@ export const metadata: Metadata = {
 }
 
 type DeputyRow = NonNullable<DeputiesQuery['deputies']['edges'][number]>['node']
-
-/**
- * Un filtre inactif est *omis* des variables, jamais envoyé à `null`.
- *
- * En GraphQL, une variable absente laisse l'argument non fourni, tandis qu'un
- * `null` explicite est une valeur transmise. La nuance n'est pas théorique :
- * l'API décide qu'un filtre de législature est actif en testant
- * `legislature !== undefined` (`GoldRepository.listCards`), si bien qu'un
- * `legislature: null` explicite lui fait rendre `totalCount: 0` — une liste
- * vide, sans erreur, alors que 567 députés existent. Omettre exprime aussi
- * plus fidèlement l'intention : « pas de filtre » n'est pas « filtre à null ».
- */
-function listVariables(params: DeputyListParams): Partial<DeputiesQueryVariables> {
-  return {
-    ...(params.legislature !== null && { legislature: params.legislature }),
-    ...(params.groupId !== null && { groupId: params.groupId }),
-    ...(params.departmentCode !== null && { departmentCode: params.departmentCode }),
-    ...(params.after !== null && { after: params.after }),
-    first: PAGE_SIZE,
-  }
-}
 
 /**
  * Aucun `try`/`catch` : une panne de l'API doit remonter en page d'erreur.
@@ -213,7 +192,18 @@ export default async function DeputiesPage({
     connection.pageInfo.hasNextPage && connection.pageInfo.endCursor !== null
       ? buildListHref(params, { after: connection.pageInfo.endCursor })
       : null
-  const firstPageHref = params.after === null ? null : buildListHref(params, { after: null })
+  const previousHref =
+    connection.pageInfo.hasPreviousPage && connection.pageInfo.startCursor !== null
+      ? buildListHref(params, { after: null, before: connection.pageInfo.startCursor })
+      : null
+  // Piloté par `pageInfo.hasPreviousPage`, pas par les paramètres d'URL :
+  // `hasPreviousPage` vaut exactement `offset > 0`, c'est-à-dire « je ne suis
+  // pas sur la première page », ce que l'API seule sait trancher. Un
+  // `params.after === null` ne le disait pas : `?after=b2Zmc2V0OjA=` (offset
+  // 0) est déjà la première page, et pourtant `after` y est non nul.
+  const firstPageHref = connection.pageInfo.hasPreviousPage
+    ? buildListHref(params, { after: null, before: null })
+    : null
   const pastLastPage = isPastLastPage(params, rows.length, connection.totalCount)
 
   return (
@@ -229,8 +219,8 @@ export default async function DeputiesPage({
 
       {pastLastPage ? (
         <p className="rounded border border-dashed border-stone-300 bg-stone-100/60 p-4 text-sm text-stone-700">
-          Cette page se situe au-delà de la fin des résultats : le curseur de pagination pointe
-          après le dernier député correspondant aux filtres actifs, qui eux en comptent bien{' '}
+          Cette page ne correspond plus à une page valide de la liste : le curseur de pagination
+          pointe en dehors des résultats actuels, alors que les filtres actifs en comptent bien{' '}
           {formatInteger(connection.totalCount) ?? connection.totalCount}.{' '}
           {firstPageHref && (
             <Link href={firstPageHref} className="underline underline-offset-2">
@@ -253,16 +243,23 @@ export default async function DeputiesPage({
         </ul>
       )}
 
-      {(nextHref || firstPageHref) && (
+      {(nextHref || previousHref || firstPageHref) && (
         <nav className="mt-6 flex items-center justify-between text-sm">
           {/*
             Pagination par liens, pas par défilement infini : un lien porte
             son état dans l'URL, se met en favori et survit au bouton retour.
           */}
           <span>
+            {previousHref && (
+              <Link href={previousHref} className="text-stone-600 underline underline-offset-2">
+                ← Page précédente
+              </Link>
+            )}
+          </span>
+          <span>
             {firstPageHref && (
               <Link href={firstPageHref} className="text-stone-600 underline underline-offset-2">
-                ← Première page
+                Première page
               </Link>
             )}
           </span>

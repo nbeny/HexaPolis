@@ -1,40 +1,12 @@
 import { ComputedBadge } from '@/components/computed-badge'
 import { FactList, type Fact } from '@/components/fact-list'
 import { SectionCard, type SectionSource } from '@/components/section-card'
+import { VoteHistory } from '@/components/vote-history'
 import type { DeputyQuery } from '@/gql/generated'
 import { formatDate, formatInteger, formatPercent } from '@/lib/format'
 
 type Deputy = NonNullable<DeputyQuery['deputy']>
 type VotingSummary = Deputy['votingSummary']
-type BallotPositions = Deputy['ballotPositions']
-type BallotPosition = NonNullable<BallotPositions['edges'][number]>['node']
-
-/**
- * Les catégories de vote voyagent depuis l'AN sans transformation
- * (`silver.ballot_position.position`). On leur donne un libellé français
- * lisible, et on retombe sur la valeur brute pour toute catégorie inconnue :
- * afficher un code non traduit vaut mieux que d'en inventer le sens.
- */
-const POSITION_LABELS: Record<string, string> = {
-  POUR: 'Pour',
-  CONTRE: 'Contre',
-  ABSTENTION: 'Abstention',
-  NON_VOTANT: 'Non-votant',
-}
-
-function positionLabel(position: string): string {
-  return POSITION_LABELS[position] ?? position
-}
-
-/**
- * Fiche du scrutin sur le site de l'AN. Construite uniquement quand le numéro
- * de scrutin et la législature sont tous deux connus : un lien deviné mènerait
- * à une autre page que celle qu'il prétend citer.
- */
-function ballotUrl(node: BallotPosition): string | null {
-  if (!node.ballotNumber || node.legislatureNumber === null) return null
-  return `https://www.assemblee-nationale.fr/dyn/${node.legislatureNumber}/scrutins/${node.ballotNumber}`
-}
 
 /**
  * `gold.deputy_card` laisse les colonnes `participation_*` à `null` pour deux
@@ -120,9 +92,11 @@ function summaryFacts(summary: VotingSummary, takingOfficeDate: string | null): 
 
   return [
     // Le total de tête porte sur la seule 17e législature — c'est le périmètre
-    // de `gold.deputy_card`. La liste des derniers scrutins, elle, ne filtre
-    // pas : les libellés le disent des deux côtés, faute de quoi deux totaux
-    // différents se liraient comme une contradiction.
+    // de `gold.deputy_card`. `VoteHistory`, plus bas, ne filtre pas : son
+    // titre porte son propre qualificatif (« toutes législatures confondues »)
+    // juste au-dessus des chiffres qu'il introduit, faute de quoi ce total-ci
+    // et le sien se liraient comme deux mesures contradictoires de la même
+    // chose alors qu'ils ne portent pas sur le même périmètre.
     {
       label: 'Positions enregistrées (17e législature)',
       value: formatInteger(summary.voteCount),
@@ -195,12 +169,17 @@ function summaryFacts(summary: VotingSummary, takingOfficeDate: string | null): 
 
 export function VotingSection({
   summary,
-  positions,
+  slug,
   takingOfficeDate,
   sources,
 }: {
   summary: VotingSummary
-  positions: BallotPositions
+  /**
+   * Slug du député, transmis à `VoteHistory` : l'historique de vote est
+   * chargé depuis le navigateur, pas par la requête serveur de la fiche —
+   * voir `vote-history.tsx`.
+   */
+  slug: string
   /**
    * `Deputy.takingOfficeDate` : date d'entrée en fonction publiée par
    * l'Assemblée pour le mandat en cours. Passée ici, et non lue dans
@@ -261,53 +240,18 @@ export function VotingSection({
         côté de lui et jamais séparé.
       </p>
 
+      {/*
+        Qualificatif obligatoire : « Positions enregistrées » ci-dessus ne
+        porte que sur la 17e législature (périmètre de `gold.deputy_card`),
+        tandis que `VoteHistory` liste l'historique complet. Sans lui, les
+        deux chiffres — par ex. 1 212 contre 2 518 pour un même député — se
+        liraient comme une contradiction plutôt que comme deux périmètres
+        différents.
+      */}
       <h3 className="mt-5 text-sm font-medium text-stone-900">
-        {positions.edges.length === 0
-          ? 'Derniers scrutins'
-          : `Derniers scrutins (${formatInteger(positions.edges.length)} affichés sur ${formatInteger(positions.totalCount)} positions, toutes législatures confondues)`}
+        Scrutins <span className="font-normal text-stone-500">(toutes législatures confondues)</span>
       </h3>
-
-      {positions.edges.length === 0 ? (
-        <p className="mt-2 text-sm text-stone-500 italic">
-          Aucune position de vote n&apos;est rattachée à ce député, toutes législatures
-          confondues.
-        </p>
-      ) : (
-        <ul className="mt-2 divide-y divide-stone-100">
-          {positions.edges.map((edge) => {
-            const node = edge.node
-            const url = ballotUrl(node)
-            const date = formatDate(node.ballotDate)
-            return (
-              <li key={edge.cursor} className="py-2">
-                <p className="text-sm text-stone-900">
-                  {positionLabel(node.position)}
-                  {node.byDelegation ? ' (par délégation)' : ''}
-                  {node.groupShortLabelAtVote ? ` — groupe ${node.groupShortLabelAtVote} au moment du vote` : ''}
-                </p>
-                <p className="text-sm text-stone-600">
-                  {url ? (
-                    <a
-                      className="underline underline-offset-2 hover:text-stone-900"
-                      href={url}
-                      rel="noreferrer noopener"
-                      target="_blank"
-                    >
-                      {node.ballotTitle ?? `Scrutin n° ${node.ballotNumber}`}
-                    </a>
-                  ) : (
-                    (node.ballotTitle ?? 'Intitulé du scrutin non publié')
-                  )}
-                </p>
-                <p className="text-xs text-stone-500">
-                  {date ?? 'Date de scrutin non publiée'}
-                  {node.publicationMode ? ` · publication : ${node.publicationMode}` : ''}
-                </p>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      <VoteHistory slug={slug} />
     </SectionCard>
   )
 }

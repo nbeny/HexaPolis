@@ -1,8 +1,14 @@
 /**
- * La fiche demande tout en une requête : six sections, un aller-retour.
+ * La fiche demande cinq sections en un aller-retour serveur : identité,
+ * mandats, groupes/commissions, synthèse de vote, élections/financement.
  * Attention à la profondeur — l'API refuse au-delà de 12 niveaux et
  * plafonne la complexité à 2000 (voir `apps/api/src/server.module.ts`).
- * `ballotPositions` est donc borné à 25, la valeur par défaut de l'API.
+ *
+ * L'historique de vote n'en fait plus partie : `ballotPositions` compte
+ * jusqu'à plusieurs milliers de positions par député (2 518 pour Nicolas
+ * Metzdorf), largement au-delà de ce qu'une seule page peut afficher.
+ * `VOTES_QUERY`, ci-dessous, le requête séparément depuis le navigateur,
+ * page par page — voir `vote-history.tsx`.
  */
 export const DEPUTY_QUERY = /* GraphQL */ `
   query Deputy($slug: String!) {
@@ -87,17 +93,25 @@ export const DEPUTY_QUERY = /* GraphQL */ `
         label
         importedAt
       }
-      ballotPositions(first: 25) {
+    }
+  }
+`
+
+/**
+ * Historique de vote complet, requêté depuis le navigateur (voir
+ * `vote-history.tsx`) : c'est le premier point de la fiche que
+ * `DEPUTY_QUERY` ne couvre plus, précisément parce qu'il ne tient pas dans
+ * les 25 premières positions.
+ */
+export const VOTES_QUERY = /* GraphQL */ `
+  query VoteHistory($slug: String!, $first: Int, $after: String, $before: String) {
+    deputy(slug: $slug) {
+      ballotPositions(first: $first, after: $after, before: $before) {
         totalCount
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
         edges {
-          cursor
           node {
             id
-            ballotId
             ballotDate
             ballotTitle
             ballotNumber
@@ -114,18 +128,21 @@ export const DEPUTY_QUERY = /* GraphQL */ `
 `
 
 export const DEPUTIES_QUERY = /* GraphQL */ `
-  query Deputies($legislature: Int, $groupId: ID, $departmentCode: String, $first: Int, $after: String) {
+  query Deputies($legislature: Int, $groupId: ID, $departmentCode: String, $first: Int, $after: String, $before: String) {
     deputies(
       legislature: $legislature
       groupId: $groupId
       departmentCode: $departmentCode
       first: $first
       after: $after
+      before: $before
     ) {
       totalCount
       pageInfo {
-        hasNextPage
+        startCursor
         endCursor
+        hasNextPage
+        hasPreviousPage
       }
       edges {
         cursor

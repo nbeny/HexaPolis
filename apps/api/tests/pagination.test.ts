@@ -148,3 +148,146 @@ describe('Deputy.votingSummary — argument legislature', () => {
     expect(summary.participationNonVotingCount).not.toBeNull()
   })
 })
+
+const QUERY_PAGE = `
+  query($slug: String!, $first: Int, $after: String, $before: String) {
+    deputy(slug: $slug) {
+      ballotPositions(first: $first, after: $after, before: $before) {
+        totalCount
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+        edges { cursor node { ballotTitle } }
+      }
+    }
+  }
+`
+
+/**
+ * Alice a 4 positions ; `first: 1` donne donc quatre pages d'une ligne.
+ * `titlesOf` compare le contenu réel des pages (pas seulement leurs
+ * curseurs, qui sont une fonction pure de l'offset et ne détecteraient pas
+ * un résolveur qui ignorerait `before`).
+ */
+async function pageOf({ after, before }: { after?: string; before?: string } = {}) {
+  const { body } = await testApp.graphql(QUERY_PAGE, {
+    slug: fixture.alice.slug,
+    first: 1,
+    ...(after !== undefined && { after }),
+    ...(before !== undefined && { before }),
+  })
+  expect(body.errors).toBeUndefined()
+  return (body.data as any).deputy.ballotPositions
+}
+
+function titlesOf(page: any): string[] {
+  return page.edges.map((e: any) => e.node.ballotTitle)
+}
+
+describe('PageInfo — les bornes des deux côtés', () => {
+  it("n'annonce aucune page précédente sur la première page", async () => {
+    const page = await pageOf()
+    expect(page.pageInfo.hasPreviousPage).toBe(false)
+    expect(page.pageInfo.hasNextPage).toBe(true)
+    expect(page.pageInfo.startCursor).toBeTruthy()
+  })
+
+  it('annonce une page précédente ET une suivante au milieu', async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf({ after: page1.pageInfo.endCursor })
+    expect(page2.pageInfo.hasPreviousPage).toBe(true)
+    expect(page2.pageInfo.hasNextPage).toBe(true)
+  })
+
+  // Alice a 4 positions et `first: 1` : exactement 3 avancées après la
+  // première page. La boucle est bornée par ce compte attendu plutôt que par
+  // `hasNextPage` seul, pour qu'une régression qui laisserait `hasNextPage`
+  // toujours vrai fasse échouer le test au lieu de tourner jusqu'au timeout.
+  it("annonce une page précédente mais aucune suivante sur la dernière page", async () => {
+    let page = await pageOf()
+    let advances = 0
+    while (page.pageInfo.hasNextPage && advances < 10) {
+      page = await pageOf({ after: page.pageInfo.endCursor })
+      advances++
+    }
+    expect(advances).toBe(3)
+    expect(page.pageInfo.hasPreviousPage).toBe(true)
+    expect(page.pageInfo.hasNextPage).toBe(false)
+  })
+
+  it("chaîne les pages : le startCursor d'une page est l'endCursor de la précédente", async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf({ after: page1.pageInfo.endCursor })
+    expect(page2.pageInfo.startCursor).toBe(page1.pageInfo.endCursor)
+  })
+})
+
+describe('Deputy.ballotPositions — retour arrière', () => {
+  it('« Précédent » depuis la page 2 rend exactement la page 1', async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf({ after: page1.pageInfo.endCursor })
+
+    const back = await pageOf({ before: page2.pageInfo.startCursor })
+
+    expect(titlesOf(back)).toEqual(titlesOf(page1))
+    expect(back.pageInfo.hasPreviousPage).toBe(false)
+  })
+
+  // Depuis la page 2, ignorer `before` et reculer d'une page donnent tous
+  // deux la page 1 : ce cas ne distingue pas un résolveur qui appliquerait
+  // réellement `before` d'un résolveur qui l'ignorerait silencieusement.
+  // Depuis la page 3, les deux divergent : ignorer `before` retomberait sur
+  // l'offset zéro, donc la page 1, tandis que reculer d'une page rend la
+  // page 2. Seul ce cas prouve que `before` est branché, et pas seulement
+  // présent dans le schéma.
+  it('« Précédent » depuis la page 3 rend exactement la page 2, pas la 1 ni la 3', async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf({ after: page1.pageInfo.endCursor })
+    const page3 = await pageOf({ after: page2.pageInfo.endCursor })
+
+    const back = await pageOf({ before: page3.pageInfo.startCursor })
+
+    expect(titlesOf(back)).toEqual(titlesOf(page2))
+    expect(titlesOf(back)).not.toEqual(titlesOf(page1))
+    expect(titlesOf(back)).not.toEqual(titlesOf(page3))
+    expect(back.pageInfo.hasPreviousPage).toBe(true)
+  })
+
+  it('reculer d’une page plus large que ce qui précède rend la première page', async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf({ after: page1.pageInfo.endCursor })
+
+    // Référence : les 3 premières positions, lues directement depuis le
+    // début (`first: 3`, sans `after` ni `before`).
+    const { body: referenceBody } = await testApp.graphql(QUERY_PAGE, {
+      slug: fixture.alice.slug,
+      first: 3,
+    })
+    expect(referenceBody.errors).toBeUndefined()
+    const reference = (referenceBody.data as any).deputy.ballotPositions
+
+    // Depuis `page2.startCursor` (position 1), reculer d'une page de taille
+    // 3 demanderait l'offset -2 : borné à zéro, donc la même page que la
+    // référence ci-dessus.
+    const { body } = await testApp.graphql(QUERY_PAGE, {
+      slug: fixture.alice.slug,
+      first: 3,
+      before: page2.pageInfo.startCursor,
+    })
+    expect(body.errors).toBeUndefined()
+    const back = (body.data as any).deputy.ballotPositions
+
+    expect(titlesOf(back)).toEqual(titlesOf(reference))
+    expect(back.pageInfo.hasPreviousPage).toBe(false)
+  })
+
+  it('rejette `after` et `before` fournis ensemble', async () => {
+    const page1 = await pageOf()
+    const { body } = await testApp.graphql(QUERY_PAGE, {
+      slug: fixture.alice.slug,
+      first: 1,
+      after: page1.pageInfo.endCursor,
+      before: page1.pageInfo.endCursor,
+    })
+    expect(body.errors?.[0]?.message).toMatch(/ensemble/)
+    expect(body.errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT')
+  })
+})

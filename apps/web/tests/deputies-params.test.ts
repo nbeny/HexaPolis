@@ -3,6 +3,7 @@ import {
   buildListHref,
   hasActiveFilters,
   isPastLastPage,
+  listVariables,
   readListParams,
 } from '@/lib/deputies-params'
 
@@ -20,6 +21,7 @@ describe('readListParams', () => {
       groupId: 'grp-1',
       departmentCode: '75',
       after: 'b2Zmc2V0OjI1',
+      before: null,
     })
   })
 
@@ -29,6 +31,7 @@ describe('readListParams', () => {
       groupId: null,
       departmentCode: null,
       after: null,
+      before: null,
     })
   })
 
@@ -50,6 +53,7 @@ describe('buildListHref', () => {
     groupId: 'grp-1',
     departmentCode: '75',
     after: null,
+    before: null,
   }
 
   it('conserve les filtres actifs dans le lien « page suivante »', () => {
@@ -74,7 +78,13 @@ describe('buildListHref', () => {
 
   it('rend une URL nue quand aucun filtre n’est actif', () => {
     expect(
-      buildListHref({ legislature: null, groupId: null, departmentCode: null, after: null }),
+      buildListHref({
+        legislature: null,
+        groupId: null,
+        departmentCode: null,
+        after: null,
+        before: null,
+      }),
     ).toBe('/deputes')
   })
 
@@ -84,13 +94,20 @@ describe('buildListHref', () => {
       groupId: 'a&b=c',
       departmentCode: null,
       after: null,
+      before: null,
     })
     expect(href).toBe('/deputes?groupId=a%26b%3Dc')
   })
 })
 
 describe('isPastLastPage', () => {
-  const withCursor = { legislature: null, groupId: null, departmentCode: '33', after: 'b2Zmc2V0OjI1' }
+  const withCursor = {
+    legislature: null,
+    groupId: null,
+    departmentCode: '33',
+    after: 'b2Zmc2V0OjI1',
+    before: null,
+  }
 
   // Cas réel de l'écart 4 : `?departmentCode=33&after=b2Zmc2V0OjI1` sur 12
   // résultats — la page est vide, mais les filtres, eux, correspondent
@@ -112,6 +129,42 @@ describe('isPastLastPage', () => {
     // filtre, pas la pagination : le message « aucun résultat » reste vrai.
     expect(isPastLastPage(withCursor, 0, 0)).toBe(false)
   })
+
+  // `before` est borné à zéro par `resolveOffset` côté API
+  // (`apps/api/src/graphql/common/cursor.ts`) : il ne peut jamais produire un
+  // offset négatif, donc jamais « dépasser le début ». Un `before` périmé ou
+  // bricolé qui pointe hors de la liste se retrouve donc lui aussi au-delà de
+  // la fin, comme un `after` périmé — `b2Zmc2V0OjEwMDAw` décode en
+  // `offset:10000`, largement au-delà des 12 résultats de ce filtre.
+  it('vrai aussi pour un `before` périmé qui pointe au-delà de la fin', () => {
+    expect(isPastLastPage({ ...withCursor, after: null, before: 'b2Zmc2V0OjEwMDAw' }, 0, 12)).toBe(
+      true,
+    )
+  })
+})
+
+describe('before', () => {
+  it('lit le curseur de retour dans la query string', () => {
+    expect(readListParams({ before: 'Y3Vyc2V1cg==' }).before).toBe('Y3Vyc2V1cg==')
+  })
+
+  it('rend null quand il est absent', () => {
+    expect(readListParams({}).before).toBeNull()
+  })
+
+  it('sérialise `before` dans le lien, en conservant les filtres actifs', () => {
+    const params = readListParams({ departmentCode: '33', after: 'QUZURVI=' })
+    expect(buildListHref(params, { after: null, before: 'QkVGT1JF' })).toBe(
+      '/deputes?departmentCode=33&before=QkVGT1JF',
+    )
+  })
+
+  it("n'émet jamais `after` et `before` ensemble : l'API les refuse", () => {
+    const params = readListParams({ after: 'QUZURVI=' })
+    const href = buildListHref(params, { before: 'QkVGT1JF' })
+    expect(href).not.toContain('after=')
+    expect(href).toContain('before=QkVGT1JF')
+  })
 })
 
 describe('hasActiveFilters', () => {
@@ -122,6 +175,7 @@ describe('hasActiveFilters', () => {
         groupId: null,
         departmentCode: null,
         after: 'b2Zmc2V0OjI1',
+        before: null,
       }),
     ).toBe(false)
     expect(
@@ -130,7 +184,22 @@ describe('hasActiveFilters', () => {
         groupId: null,
         departmentCode: '75',
         after: null,
+        before: null,
       }),
     ).toBe(true)
+  })
+})
+
+describe('listVariables', () => {
+  // `readListParams` lit `after` et `before` indépendamment l'un de l'autre :
+  // rien n'empêche une URL bricolée à la main de porter les deux. C'est le
+  // seul chemin par lequel la combinaison interdite pourrait atteindre
+  // l'API et lui faire rendre un `BAD_USER_INPUT` — `buildListHref` ne
+  // produit lui-même jamais les deux ensemble, donc ne le teste pas.
+  it("n'envoie que `after` à l'API quand une URL porte les deux curseurs", () => {
+    const params = readListParams({ after: 'QUZURVI=', before: 'QkVGT1JF' })
+    const variables = listVariables(params)
+    expect(variables.after).toBe('QUZURVI=')
+    expect(variables.before).toBeUndefined()
   })
 })

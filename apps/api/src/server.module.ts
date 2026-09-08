@@ -1,10 +1,11 @@
 import { fileURLToPath } from 'node:url'
-import { APP_GUARD } from '@nestjs/core'
+import { APP_FILTER, APP_GUARD } from '@nestjs/core'
 import { type DynamicModule, Module } from '@nestjs/common'
 import { ApolloDriver, type ApolloDriverConfig } from '@nestjs/apollo'
 import { GraphQLModule } from '@nestjs/graphql'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { buildComplexityPlugin, buildDepthLimitRule } from './graphql/complexity.js'
+import { GraphqlErrorFilter } from './graphql/filters/graphql-error.filter.js'
 import { GqlThrottlerGuard } from './graphql/guards/gql-throttler.guard.js'
 import { GraphqlAppModule } from './graphql/graphql-app.module.js'
 
@@ -57,7 +58,10 @@ export class ServerModule {
         }),
         GraphqlAppModule,
       ],
-      providers: [{ provide: APP_GUARD, useClass: GqlThrottlerGuard }],
+      providers: [
+        { provide: APP_GUARD, useClass: GqlThrottlerGuard },
+        { provide: APP_FILTER, useClass: GraphqlErrorFilter },
+      ],
     }
   }
 }

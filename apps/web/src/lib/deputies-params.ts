@@ -13,6 +13,8 @@
  * son test dédié.
  */
 
+import type { DeputiesQueryVariables } from '@/gql/generated'
+
 /** La 17e législature est le seul périmètre de la V1 (spec §2). */
 export const CURRENT_LEGISLATURE = 17
 
@@ -26,6 +28,8 @@ export interface DeputyListParams {
   departmentCode: string | null
   /** Curseur opaque rendu par `pageInfo.endCursor`. */
   after: string | null
+  /** Curseur opaque rendu par `pageInfo.startCursor`, pour reculer d'une page. */
+  before: string | null
 }
 
 /** Ce que Next passe à une page pour `searchParams`, une fois la promesse attendue. */
@@ -55,6 +59,7 @@ export function readListParams(searchParams: RawSearchParams): DeputyListParams 
     groupId: readOne(searchParams.groupId),
     departmentCode: readOne(searchParams.departmentCode),
     after: readOne(searchParams.after),
+    before: readOne(searchParams.before),
   }
 }
 
@@ -73,10 +78,61 @@ export function buildListHref(
   if (merged.legislature !== null) query.set('legislature', String(merged.legislature))
   if (merged.groupId !== null) query.set('groupId', merged.groupId)
   if (merged.departmentCode !== null) query.set('departmentCode', merged.departmentCode)
-  if (merged.after !== null) query.set('after', merged.after)
+  // `after` et `before` s'excluent : l'API rejette les deux ensemble en
+  // BAD_USER_INPUT. Un `before` demandé chasse donc l'`after` hérité des
+  // paramètres courants, plutôt que de produire une URL que l'API refusera.
+  // `!= null` (et non `!== null`) est délibéré : la plupart des appels (ex.
+  // `nextHref`, qui ne passe que `{ after: cursor }`) ne mentionnent pas
+  // `before` du tout, donc `overrides.before` vaut `undefined`, pas `null`.
+  // Un `!== null` laisserait passer ce cas et écrirait `before=undefined`
+  // dans l'URL au lieu de laisser la priorité à `merged.after` ci-dessous.
+  if (overrides.before != null) {
+    query.set('before', overrides.before)
+  } else if (merged.after !== null) {
+    query.set('after', merged.after)
+  } else if (merged.before !== null) {
+    query.set('before', merged.before)
+  }
 
   const serialized = query.toString()
   return serialized === '' ? '/deputes' : `/deputes?${serialized}`
+}
+
+/**
+ * Construit les variables GraphQL de la requête `Deputies` à partir des
+ * paramètres de l'URL. Un filtre inactif est *omis*, jamais envoyé à `null`.
+ *
+ * En GraphQL, une variable absente laisse l'argument non fourni, tandis qu'un
+ * `null` explicite est une valeur transmise. La nuance n'est pas théorique :
+ * l'API décide qu'un filtre de législature est actif en testant
+ * `legislature !== undefined` (`GoldRepository.listCards`), si bien qu'un
+ * `legislature: null` explicite lui fait rendre `totalCount: 0` — une liste
+ * vide, sans erreur, alors que 567 députés existent. Omettre exprime aussi
+ * plus fidèlement l'intention : « pas de filtre » n'est pas « filtre à null ».
+ *
+ * Exportée (et non gardée locale à la page) parce que c'est le seul endroit
+ * où l'exclusion `after`/`before` compte vraiment : `buildListHref` ne
+ * produit jamais les deux à la fois, mais rien n'empêche une URL bricolée à
+ * la main de les porter tous les deux — c'est alors `listVariables`, pas
+ * `buildListHref`, qui empêche la combinaison interdite d'atteindre l'API et
+ * de lui faire rendre un `BAD_USER_INPUT`.
+ */
+export function listVariables(params: DeputyListParams): Partial<DeputiesQueryVariables> {
+  return {
+    ...(params.legislature !== null && { legislature: params.legislature }),
+    ...(params.groupId !== null && { groupId: params.groupId }),
+    ...(params.departmentCode !== null && { departmentCode: params.departmentCode }),
+    // `after` et `before` s'excluent côté API : les fournir ensemble est
+    // rejeté en BAD_USER_INPUT. Nos propres liens n'émettent jamais les deux
+    // à la fois (voir `buildListHref`), mais une URL bricolée à la main le
+    // pourrait — `after` l'emporte alors, par cohérence avec `buildListHref`.
+    ...(params.after !== null
+      ? { after: params.after }
+      : params.before !== null
+        ? { before: params.before }
+        : {}),
+    first: PAGE_SIZE,
+  }
 }
 
 /** Vrai dès qu'au moins un filtre est actif — la pagination n'en est pas un. */
@@ -89,12 +145,21 @@ export function hasActiveFilters(params: DeputyListParams): boolean {
 /**
  * Une page de liste vide a deux causes que le texte affiché ne doit jamais
  * confondre : soit aucun député ne correspond aux filtres (`totalCount ===
- * 0`), soit un curseur `after` forgé ou périmé pointe au-delà de la fin
+ * 0`), soit un curseur — `after` ou `before` — forgé ou périmé pointe hors
  * d'une liste qui, elle, a des résultats. La seconde ne dit rien des
  * filtres — écart 4 du plan p6, tâche 8 : `/deputes?departmentCode=33&after=…`
  * affichait « 12 députés correspondent aux filtres actifs » suivi d'un
  * message qui prétendait le contraire.
+ *
+ * `before` retombe dans le même cas que `after`, et pas seulement par
+ * analogie : `resolveOffset` (`apps/api/src/graphql/common/cursor.ts`) borne
+ * `before` à zéro, donc un `before` ne peut jamais produire un offset négatif
+ * — il ne peut pas « dépasser le début ». Un `before` hors bornes se retrouve
+ * donc lui aussi au-delà de la fin, exactement comme l'`after` périmé de
+ * l'écart 4. Ce n'est atteignable que par une URL bricolée ou périmée
+ * (`previousHref` ne construit un `before` qu'à partir d'un `startCursor`
+ * réellement rendu par l'API).
  */
 export function isPastLastPage(params: DeputyListParams, rowCount: number, totalCount: number): boolean {
-  return rowCount === 0 && params.after !== null && totalCount > 0
+  return rowCount === 0 && (params.after !== null || params.before !== null) && totalCount > 0
 }

@@ -81,7 +81,7 @@ export default async function DeputyPage({ params }: { params: Promise<{ slug: s
       />
       <VotingSection
         summary={deputy.votingSummary}
-        positions={deputy.ballotPositions}
+        slug={deputy.slug}
         takingOfficeDate={deputy.takingOfficeDate}
         sources={anSources}
       />

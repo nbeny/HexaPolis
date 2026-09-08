@@ -6,3 +6,8 @@
 # permanent dans `git status`, et le genre de faux positif qu'on finit par
 # ignorer, y compris le jour où le schéma a réellement changé.
 apps/api/schema.gql text eol=lf
+
+# docker/dev-entrypoint.sh est exécuté par /bin/sh dans un conteneur Linux :
+# extrait en CRLF sous Windows par `core.autocrlf`, son shebang devient
+# `#!/bin/sh\r` et le conteneur sort sur « no such file or directory ».
+*.sh text eol=lf

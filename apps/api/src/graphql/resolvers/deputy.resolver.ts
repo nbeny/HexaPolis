@@ -1,6 +1,7 @@
 import { Args, ID, Int, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql'
 import { anIdFromSlug, buildDeputySlug } from '../common/slug.js'
-import { decodeCursor, encodeCursor } from '../common/cursor.js'
+import { resolveOffset } from '../common/cursor.js'
+import { buildConnection } from '../common/connection.js'
 import { optionalArg } from '../common/optional-arg.js'
 import { clampPageSize, clampSearchLimit } from '../common/pagination.js'
 import { FactStatus } from '../common/fact-status.enum.js'
@@ -84,10 +85,18 @@ export class DeputyResolver {
     departmentCode: string | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
+    @Args('before', {
+      type: () => String,
+      nullable: true,
+      description:
+        'Position AVANT la page courante — le `pageInfo.startCursor` de cette page, ' +
+        'pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. ' +
+        'Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).',
+    })
+    before: string | null | undefined,
   ): Promise<InstanceType<typeof DeputyConnection>> {
-    const afterValue = optionalArg(after)
     const limit = clampPageSize(optionalArg(first))
-    const offset = afterValue ? decodeCursor(afterValue) : 0
+    const offset = resolveOffset({ after: optionalArg(after), before: optionalArg(before), pageSize: limit })
     const { rows, totalCount } = await this.goldRepository.listCards(
       {
         legislature: optionalArg(legislature),
@@ -97,18 +106,7 @@ export class DeputyResolver {
       limit,
       offset,
     )
-    const edges = rows.map((card, index) => ({
-      cursor: encodeCursor(offset + index + 1),
-      node: cardToDeputy(card),
-    }))
-    return {
-      edges,
-      pageInfo: {
-        hasNextPage: offset + rows.length < totalCount,
-        endCursor: edges.at(-1)?.cursor,
-      },
-      totalCount,
-    }
+    return buildConnection({ rows, offset, totalCount, toNode: cardToDeputy })
   }
 
   @Query(() => [SearchHit])
@@ -167,28 +165,25 @@ export class DeputyResolver {
     @Args('legislature', { type: () => Int, nullable: true }) legislature: number | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
+    @Args('before', {
+      type: () => String,
+      nullable: true,
+      description:
+        'Position AVANT la page courante — le `pageInfo.startCursor` de cette page, ' +
+        'pas le curseur d’une arête. Rend les `first` éléments qui la précèdent. ' +
+        'Exclusif avec `after`, qui prend lui un curseur d’arête (`pageInfo.endCursor`).',
+    })
+    before: string | null | undefined,
   ): Promise<InstanceType<typeof BallotPositionConnection>> {
-    const afterValue = optionalArg(after)
     const limit = clampPageSize(optionalArg(first))
-    const offset = afterValue ? decodeCursor(afterValue) : 0
+    const offset = resolveOffset({ after: optionalArg(after), before: optionalArg(before), pageSize: limit })
     const { rows, totalCount } = await this.goldRepository.listVotes(
       deputy.id,
       optionalArg(legislature),
       limit,
       offset,
     )
-    const edges = rows.map((row, index) => ({
-      cursor: encodeCursor(offset + index + 1),
-      node: voteToBallotPosition(row),
-    }))
-    return {
-      edges,
-      pageInfo: {
-        hasNextPage: offset + rows.length < totalCount,
-        endCursor: edges.at(-1)?.cursor,
-      },
-      totalCount,
-    }
+    return buildConnection({ rows, offset, totalCount, toNode: voteToBallotPosition })
   }
 
   /**

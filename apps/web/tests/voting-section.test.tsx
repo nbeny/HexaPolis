@@ -1,6 +1,37 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { pageLabel } from '@/components/vote-history'
 import { VotingSection } from '@/components/sections/voting-section'
+
+/**
+ * `VotingSection` monte désormais `VoteHistory`, un composant client qui
+ * requête l'API depuis le navigateur (tâche 5). Ces tests portent sur la
+ * synthèse de participation, restée côté serveur : ils ne vérifient rien de
+ * l'historique de vote, mais le montage de `VoteHistory` appellerait `fetch`
+ * pour de vrai sans ce bouchon.
+ *
+ * Le bouchon ne résout jamais : ces tests ne rendent d'assertion sur aucun
+ * état de `VoteHistory` (ni chargement, ni prêt, ni erreur, ni introuvable —
+ * ces états sont couverts par `vote-history.test.tsx`), donc rien ne doit
+ * s'y résoudre. Un bouchon qui *répondrait* forcerait une transition d'état
+ * hors du rendu initial, sans qu'aucun test ici ne l'attende — exactement le
+ * genre de mise à jour que React signale comme non enveloppée dans `act()`.
+ * `{ deputy: null }` a été écarté pour la même raison dans l'autre sens :
+ * c'est un mode de panne réel de l'API (voir `vote-history.test.tsx`, état
+ * « introuvable »), pas une donnée de confort à normaliser ici.
+ */
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<Response>(() => {})),
+  )
+})
+afterEach(() => vi.unstubAllGlobals())
+
+const SLUG = 'pa000000-test'
+
+/** Espace fine insécable (U+202F) : celle que `Intl.NumberFormat('fr-FR')` produit réellement. */
+const NNBSP = ' '
 
 /**
  * Deux normalisations, toutes deux nécessaires pour comparer le rendu réel :
@@ -45,37 +76,16 @@ const resume = {
  */
 const PRISE_FONCTION = '2024-07-08'
 
-const positions = {
-  totalCount: 412,
-  pageInfo: { hasNextPage: true, endCursor: 'Y3Vyc29yOjI1' },
-  edges: [
-    {
-      cursor: 'Y3Vyc29yOjE=',
-      node: {
-        id: 'bp1',
-        ballotId: 'b1',
-        ballotDate: '2024-10-15',
-        ballotTitle: 'Projet de loi de finances pour 2025',
-        ballotNumber: '412',
-        legislatureNumber: 17,
-        position: 'FOR',
-        byDelegation: false,
-        groupShortLabelAtVote: 'LR',
-        publicationMode: 'DecompteNominatif',
-      },
-    },
-  ],
-}
 
 describe('VotingSection', () => {
   it('marque les chiffres de participation comme calculés', () => {
-    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
+    render(<VotingSection summary={resume} slug={SLUG} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
     expect(screen.getByText(/80,00 %/)).toBeInTheDocument()
     expect(screen.getAllByText(/calculé par PoliGraph/i).length).toBeGreaterThan(0)
   })
 
   it('décompose la participation au lieu de publier un pourcentage seul', () => {
-    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
+    render(<VotingSection summary={resume} slug={SLUG} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
 
     // Les quatre décomptes dont le taux est tiré sont sur la fiche, dans
     // l'ordre du plus large au plus étroit.
@@ -112,7 +122,7 @@ describe('VotingSection', () => {
           participationNonVotingCount: 8341,
           participationExpressedRate: 0.011,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
@@ -136,7 +146,7 @@ describe('VotingSection', () => {
           participationExpressedCount: 93,
           participationExpressedRate: 0.011,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
@@ -162,7 +172,7 @@ describe('VotingSection', () => {
           participationNonVotingCount: null,
           participationExpressedRate: null,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
@@ -191,7 +201,7 @@ describe('VotingSection', () => {
           participationNonVotingCount: null,
           participationExpressedRate: null,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
@@ -223,7 +233,7 @@ describe('VotingSection', () => {
           participationNonVotingCount: 0,
           participationExpressedRate: 0.1909,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate={PRISE_FONCTION}
         sources={[]}
       />,
@@ -234,7 +244,7 @@ describe('VotingSection', () => {
   })
 
   it("ne présente jamais une absence de ligne comme une absence du député", () => {
-    render(<VotingSection summary={resume} positions={positions} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
+    render(<VotingSection summary={resume} slug={SLUG} takingOfficeDate={PRISE_FONCTION} sources={[]} />)
     // 412 scrutins nommés sur 500 éligibles : les 88 restants ne sont PAS des
     // absences constatées — l'AN ne nomme sur un scrutin que les députés pour
     // lesquels une position a été enregistrée.
@@ -260,7 +270,7 @@ describe('VotingSection', () => {
           participationNonVotingCount: 0,
           participationExpressedRate: 0.2353,
         }}
-        positions={positions}
+        slug={SLUG}
         takingOfficeDate="2026-07-20"
         sources={[]}
       />,
@@ -279,7 +289,7 @@ describe('VotingSection', () => {
 
   it("dit que la fenêtre retombe sur la date de début quand la source ne publie pas d'entrée en fonction", () => {
     render(
-      <VotingSection summary={resume} positions={positions} takingOfficeDate={null} sources={[]} />,
+      <VotingSection summary={resume} slug={SLUG} takingOfficeDate={null} sources={[]} />,
     )
 
     // Pas de date inventée, pas de repli silencieux sur la date de début : le
@@ -288,5 +298,23 @@ describe('VotingSection', () => {
       texteVisible("ne publie pas de date d'entrée en fonction pour le mandat en cours"),
     ).toBeInTheDocument()
     expect(texteVisible('la section « Mandats »')).toBeInTheDocument()
+  })
+})
+
+describe('pageLabel', () => {
+  it('décrit la tranche affichée, pas seulement son nombre', () => {
+    expect(pageLabel(0, 25, 2518)).toBe(`1-25 sur 2${NNBSP}518`)
+  })
+
+  it('compte depuis la position réelle sur une page du milieu', () => {
+    expect(pageLabel(50, 25, 2518)).toBe(`51-75 sur 2${NNBSP}518`)
+  })
+
+  it('ne dépasse jamais le total sur la dernière page', () => {
+    expect(pageLabel(2500, 25, 2518)).toBe(`2${NNBSP}501-2${NNBSP}518 sur 2${NNBSP}518`)
+  })
+
+  it('reste lisible quand il n’y a rien à afficher', () => {
+    expect(pageLabel(0, 25, 0)).toBe('aucune position de vote')
   })
 })
