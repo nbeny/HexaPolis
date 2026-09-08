@@ -1,6 +1,7 @@
 import { Args, ID, Int, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql'
 import { anIdFromSlug, buildDeputySlug } from '../common/slug.js'
-import { decodeCursor, encodeCursor } from '../common/cursor.js'
+import { decodeCursor } from '../common/cursor.js'
+import { buildConnection } from '../common/connection.js'
 import { optionalArg } from '../common/optional-arg.js'
 import { clampPageSize, clampSearchLimit } from '../common/pagination.js'
 import { FactStatus } from '../common/fact-status.enum.js'
@@ -97,18 +98,7 @@ export class DeputyResolver {
       limit,
       offset,
     )
-    const edges = rows.map((card, index) => ({
-      cursor: encodeCursor(offset + index + 1),
-      node: cardToDeputy(card),
-    }))
-    return {
-      edges,
-      pageInfo: {
-        hasNextPage: offset + rows.length < totalCount,
-        endCursor: edges.at(-1)?.cursor,
-      },
-      totalCount,
-    }
+    return buildConnection(rows, offset, totalCount, cardToDeputy)
   }
 
   @Query(() => [SearchHit])
@@ -177,18 +167,7 @@ export class DeputyResolver {
       limit,
       offset,
     )
-    const edges = rows.map((row, index) => ({
-      cursor: encodeCursor(offset + index + 1),
-      node: voteToBallotPosition(row),
-    }))
-    return {
-      edges,
-      pageInfo: {
-        hasNextPage: offset + rows.length < totalCount,
-        endCursor: edges.at(-1)?.cursor,
-      },
-      totalCount,
-    }
+    return buildConnection(rows, offset, totalCount, voteToBallotPosition)
   }
 
   /**

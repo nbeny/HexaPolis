@@ -148,3 +148,54 @@ describe('Deputy.votingSummary — argument legislature', () => {
     expect(summary.participationNonVotingCount).not.toBeNull()
   })
 })
+
+const QUERY_PAGE_INFO = `
+  query($slug: String!, $first: Int, $after: String) {
+    deputy(slug: $slug) {
+      ballotPositions(first: $first, after: $after) {
+        totalCount
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
+        edges { cursor }
+      }
+    }
+  }
+`
+
+/** Alice a 4 positions ; `first: 1` donne donc quatre pages d'une ligne. */
+async function pageOf(after?: string) {
+  const { body } = await testApp.graphql(QUERY_PAGE_INFO, {
+    slug: fixture.alice.slug,
+    first: 1,
+    ...(after !== undefined && { after }),
+  })
+  expect(body.errors).toBeUndefined()
+  return (body.data as any).deputy.ballotPositions
+}
+
+describe('PageInfo — les bornes des deux côtés', () => {
+  it("n'annonce aucune page précédente sur la première page", async () => {
+    const page = await pageOf()
+    expect(page.pageInfo.hasPreviousPage).toBe(false)
+    expect(page.pageInfo.hasNextPage).toBe(true)
+    expect(page.pageInfo.startCursor).toBeTruthy()
+  })
+
+  it('annonce une page précédente ET une suivante au milieu', async () => {
+    const page2 = await pageOf((await pageOf()).pageInfo.endCursor)
+    expect(page2.pageInfo.hasPreviousPage).toBe(true)
+    expect(page2.pageInfo.hasNextPage).toBe(true)
+  })
+
+  it("annonce une page précédente mais aucune suivante sur la dernière page", async () => {
+    let page = await pageOf()
+    while (page.pageInfo.hasNextPage) page = await pageOf(page.pageInfo.endCursor)
+    expect(page.pageInfo.hasPreviousPage).toBe(true)
+    expect(page.pageInfo.hasNextPage).toBe(false)
+  })
+
+  it("chaîne les pages : le startCursor d'une page est l'endCursor de la précédente", async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf(page1.pageInfo.endCursor)
+    expect(page2.pageInfo.startCursor).toBe(page1.pageInfo.endCursor)
+  })
+})
