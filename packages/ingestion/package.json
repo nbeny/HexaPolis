@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/yauzl-promise": "^4.0.1",
+    "tsx": "^4.19.2",
     "vitest": "^2.1.8"
   }
 }

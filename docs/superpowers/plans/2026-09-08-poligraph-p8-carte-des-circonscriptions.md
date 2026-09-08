@@ -764,6 +764,15 @@ node -e "const g=require('./apps/web/public/geo/circonscriptions.json'); console
 
 Attendu : **559 entités**. Consigner la taille obtenue dans ce plan.
 
+> **Chiffres obtenus (2026-09-08) :** 559 entités, chacune ne portant que
+> `codeCirconscription`, `codeDepartement` et `nomDepartement` (vérifié : `9310`
+> → « Seine-Saint-Denis » ; aucune propriété `payload`). Géométries `Polygon`
+> ou `MultiPolygon` toutes non vides. Taille brute **5 421 651 octets (5,2
+> Mio / 5,4 Mo)**, gzip **1 464 043 octets (1,4 Mio / 1,46 Mo)** — légèrement
+> en dessous des 1,55 Mo mesurés en tête de plan (l'asset n'émet que trois
+> propriétés par entité, contre le `payload` complet mesuré alors), ce qui
+> renforce plutôt qu'il n'affaiblit la décision d'écarter TopoJSON.
+
 - [ ] **Étape 3 : committer l'asset**
 
 L'asset est dérivé, mais il est versionné : c'est la seule chose que le front
