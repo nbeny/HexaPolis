@@ -234,9 +234,10 @@ describe('Deputy.ballotPositions — retour arrière', () => {
   // Depuis la page 2, ignorer `before` et reculer d'une page donnent tous
   // deux la page 1 : ce cas ne distingue pas un résolveur qui appliquerait
   // réellement `before` d'un résolveur qui l'ignorerait silencieusement.
-  // Depuis la page 3, les deux divergent : ignorer `before` répéterait la
-  // page 3, reculer d'une page rend la page 2. Seul ce dernier cas prouve
-  // que `before` est branché, et pas seulement présent dans le schéma.
+  // Depuis la page 3, les deux divergent : ignorer `before` retomberait sur
+  // l'offset zéro, donc la page 1, tandis que reculer d'une page rend la
+  // page 2. Seul ce cas prouve que `before` est branché, et pas seulement
+  // présent dans le schéma.
   it('« Précédent » depuis la page 3 rend exactement la page 2, pas la 1 ni la 3', async () => {
     const page1 = await pageOf()
     const page2 = await pageOf({ after: page1.pageInfo.endCursor })

@@ -9,6 +9,12 @@ import { GraphQLError } from 'graphql'
  * relaie intacte sans l'écrire dans les logs d'erreur ; toute autre
  * exception continue d'être loggée normalement.
  *
+ * Le filtre porte sur la classe, pas sur le code : toute `GraphQLError`
+ * levée depuis un résolveur racine échappe désormais au log. C'est
+ * volontaire — une `GraphQLError` explicite est un refus délibéré, pas une
+ * panne — mais une panne serveur doit donc être levée en `Error` nu ou en
+ * exception Nest, jamais en `GraphQLError`.
+ *
  * Portée réelle, vérifiée empiriquement (voir la tâche qui a introduit ce
  * fichier) : NestJS n'applique les filtres (globaux ou non) aux résolveurs
  * de champ (`@ResolveField`, ex. `Deputy.ballotPositions`) que si

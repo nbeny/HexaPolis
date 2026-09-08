@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { refreshGold } from '@poligraph/ingestion'
+import { encodeCursor } from '../src/graphql/common/cursor.js'
 import { createTestApp, type TestApp } from './helpers/app.js'
 import { resetDatabase, testPrisma } from './helpers/db.js'
 import { seedFiche, type SeededFiche } from './helpers/seed.js'
@@ -88,6 +89,53 @@ describe('Query.deputies', () => {
     )
     expect(body.errors).toBeUndefined()
     expect((body.data as any).deputies.totalCount).toBe(2)
+  })
+
+  // `Query.deputies` est une requête racine : contrairement à
+  // `Deputy.ballotPositions` (un @ResolveField, que les filtres Nest
+  // n'atteignent pas faute de `fieldResolverEnhancers`), c'est le seul
+  // chemin où `GraphqlErrorFilter` a un effet. Sans ce test, la connexion
+  // racine n'a aucune couverture de son argument `before`.
+  it('deputies : `after` et `before` ensemble sont refusés en BAD_USER_INPUT', async () => {
+    const { body } = await testApp.graphql(
+      `query($after: String, $before: String) {
+         deputies(first: 1, after: $after, before: $before) { totalCount }
+       }`,
+      { after: encodeCursor(1), before: encodeCursor(1) },
+    )
+    expect(body.errors?.[0]?.message).toMatch(/ensemble/)
+    expect(body.errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT')
+  })
+
+  // Aller-retour symétrique de celui de `Deputy.ballotPositions` : Alice et
+  // Bob sont les deux seuls députés de la fixture, triés par nom de famille
+  // (Dupont puis Martin) — de quoi former deux pages d'un élément et vérifier
+  // que `before` ramène bien la première.
+  it('deputies : `before` depuis la page 2 rend exactement la page 1', async () => {
+    const QUERY = `
+      query($first: Int, $after: String, $before: String) {
+        deputies(first: $first, after: $after, before: $before) {
+          pageInfo { startCursor endCursor hasPreviousPage }
+          edges { cursor node { displayName } }
+        }
+      }
+    `
+    const page1res = await testApp.graphql(QUERY, { first: 1 })
+    expect(page1res.body.errors).toBeUndefined()
+    const page1 = (page1res.body.data as any).deputies
+
+    const page2res = await testApp.graphql(QUERY, { first: 1, after: page1.pageInfo.endCursor })
+    expect(page2res.body.errors).toBeUndefined()
+    const page2 = (page2res.body.data as any).deputies
+
+    const backRes = await testApp.graphql(QUERY, { first: 1, before: page2.pageInfo.startCursor })
+    expect(backRes.body.errors).toBeUndefined()
+    const back = (backRes.body.data as any).deputies
+
+    expect(back.edges.map((e: any) => e.node.displayName)).toEqual(
+      page1.edges.map((e: any) => e.node.displayName),
+    )
+    expect(back.pageInfo.hasPreviousPage).toBe(false)
   })
 })
 
