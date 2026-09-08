@@ -676,6 +676,19 @@ join silver.provenance p on p.entity_id = t.id and p.field = 'geometry';"
 
 Attendu : **559 sur 577**. Consigner le chiffre obtenu dans ce plan.
 
+> **Chiffre obtenu (2026-09-08) :** 577 députés, **559 avec contour**. Conforme
+> à l'attendu. Import réel : `pnpm --filter @poligraph/api run cli import
+> geo:circonscriptions` a stagé 559 lignes bronze ; la normalisation a créé
+> 559 provenances `field: 'geometry'`, rejeté 0 ligne bronze (toutes les
+> lignes publiées correspondent à un territoire connu) et laissé 156
+> territoires en `pending` — des `silver.territory` CIRCONSCRIPTION dont le
+> code se traduit en un code GeoJSON théorique mais que ce fichier ne publie
+> pas (entrées de département sans numéro comme `01-0`, et des codes issus de
+> découpages/législatures antérieurs à la 17e qui ne correspondent plus au
+> découpage actuel). Ce n'est pas une anomalie : la vérification qui compte
+> est la jointure `gold.deputy_card` ci-dessus, qui ne porte que sur les 577
+> sièges actuels.
+
 Écrire ensuite le test qui verrouille la liste, dans
 `packages/ingestion/tests/geo-codes.test.ts` :
 
