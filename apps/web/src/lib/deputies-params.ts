@@ -26,6 +26,8 @@ export interface DeputyListParams {
   departmentCode: string | null
   /** Curseur opaque rendu par `pageInfo.endCursor`. */
   after: string | null
+  /** Curseur opaque rendu par `pageInfo.startCursor`, pour reculer d'une page. */
+  before: string | null
 }
 
 /** Ce que Next passe à une page pour `searchParams`, une fois la promesse attendue. */
@@ -55,6 +57,7 @@ export function readListParams(searchParams: RawSearchParams): DeputyListParams 
     groupId: readOne(searchParams.groupId),
     departmentCode: readOne(searchParams.departmentCode),
     after: readOne(searchParams.after),
+    before: readOne(searchParams.before),
   }
 }
 
@@ -73,7 +76,16 @@ export function buildListHref(
   if (merged.legislature !== null) query.set('legislature', String(merged.legislature))
   if (merged.groupId !== null) query.set('groupId', merged.groupId)
   if (merged.departmentCode !== null) query.set('departmentCode', merged.departmentCode)
-  if (merged.after !== null) query.set('after', merged.after)
+  // `after` et `before` s'excluent : l'API rejette les deux ensemble en
+  // BAD_USER_INPUT. Un `before` demandé chasse donc l'`after` hérité des
+  // paramètres courants, plutôt que de produire une URL que l'API refusera.
+  if (overrides.before != null) {
+    query.set('before', overrides.before)
+  } else if (merged.after !== null) {
+    query.set('after', merged.after)
+  } else if (merged.before !== null) {
+    query.set('before', merged.before)
+  }
 
   const serialized = query.toString()
   return serialized === '' ? '/deputes' : `/deputes?${serialized}`
@@ -89,12 +101,18 @@ export function hasActiveFilters(params: DeputyListParams): boolean {
 /**
  * Une page de liste vide a deux causes que le texte affiché ne doit jamais
  * confondre : soit aucun député ne correspond aux filtres (`totalCount ===
- * 0`), soit un curseur `after` forgé ou périmé pointe au-delà de la fin
+ * 0`), soit un curseur — `after` ou `before` — forgé ou périmé pointe hors
  * d'une liste qui, elle, a des résultats. La seconde ne dit rien des
  * filtres — écart 4 du plan p6, tâche 8 : `/deputes?departmentCode=33&after=…`
  * affichait « 12 députés correspondent aux filtres actifs » suivi d'un
  * message qui prétendait le contraire.
+ *
+ * `before` retombe dans le même cas que `after` : `previousHref` n'est
+ * construit qu'à partir d'un `startCursor` réellement rendu par l'API, donc
+ * le seul moyen d'obtenir un `before` hors bornes est une URL bricolée ou
+ * périmée (des députés supprimés entre le rendu du lien et son suivi) — la
+ * même situation, côté opposé, que l'`after` périmé de l'écart 4.
  */
 export function isPastLastPage(params: DeputyListParams, rowCount: number, totalCount: number): boolean {
-  return rowCount === 0 && params.after !== null && totalCount > 0
+  return rowCount === 0 && (params.after !== null || params.before !== null) && totalCount > 0
 }

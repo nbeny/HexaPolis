@@ -40,7 +40,15 @@ function listVariables(params: DeputyListParams): Partial<DeputiesQueryVariables
     ...(params.legislature !== null && { legislature: params.legislature }),
     ...(params.groupId !== null && { groupId: params.groupId }),
     ...(params.departmentCode !== null && { departmentCode: params.departmentCode }),
-    ...(params.after !== null && { after: params.after }),
+    // `after` et `before` s'excluent côté API : les fournir ensemble est
+    // rejeté en BAD_USER_INPUT. Nos propres liens n'émettent jamais les deux
+    // à la fois (voir `buildListHref`), mais une URL bricolée à la main le
+    // pourrait — `after` l'emporte alors, par cohérence avec `buildListHref`.
+    ...(params.after !== null
+      ? { after: params.after }
+      : params.before !== null
+        ? { before: params.before }
+        : {}),
     first: PAGE_SIZE,
   }
 }
@@ -213,7 +221,17 @@ export default async function DeputiesPage({
     connection.pageInfo.hasNextPage && connection.pageInfo.endCursor !== null
       ? buildListHref(params, { after: connection.pageInfo.endCursor })
       : null
-  const firstPageHref = params.after === null ? null : buildListHref(params, { after: null })
+  const previousHref =
+    connection.pageInfo.hasPreviousPage && connection.pageInfo.startCursor !== null
+      ? buildListHref(params, { after: null, before: connection.pageInfo.startCursor })
+      : null
+  // Une page peut désormais être atteinte par `after` ou par `before` : le
+  // lien « première page » doit s'afficher dans les deux cas, pas seulement
+  // quand on est arrivé en avançant.
+  const firstPageHref =
+    params.after === null && params.before === null
+      ? null
+      : buildListHref(params, { after: null, before: null })
   const pastLastPage = isPastLastPage(params, rows.length, connection.totalCount)
 
   return (
@@ -229,8 +247,8 @@ export default async function DeputiesPage({
 
       {pastLastPage ? (
         <p className="rounded border border-dashed border-stone-300 bg-stone-100/60 p-4 text-sm text-stone-700">
-          Cette page se situe au-delà de la fin des résultats : le curseur de pagination pointe
-          après le dernier député correspondant aux filtres actifs, qui eux en comptent bien{' '}
+          Cette page ne correspond plus à une page valide de la liste : le curseur de pagination
+          pointe en dehors des résultats actuels, alors que les filtres actifs en comptent bien{' '}
           {formatInteger(connection.totalCount) ?? connection.totalCount}.{' '}
           {firstPageHref && (
             <Link href={firstPageHref} className="underline underline-offset-2">
@@ -253,16 +271,23 @@ export default async function DeputiesPage({
         </ul>
       )}
 
-      {(nextHref || firstPageHref) && (
+      {(nextHref || previousHref || firstPageHref) && (
         <nav className="mt-6 flex items-center justify-between text-sm">
           {/*
             Pagination par liens, pas par défilement infini : un lien porte
             son état dans l'URL, se met en favori et survit au bouton retour.
           */}
           <span>
+            {previousHref && (
+              <Link href={previousHref} className="text-stone-600 underline underline-offset-2">
+                ← Page précédente
+              </Link>
+            )}
+          </span>
+          <span>
             {firstPageHref && (
               <Link href={firstPageHref} className="text-stone-600 underline underline-offset-2">
-                ← Première page
+                Première page
               </Link>
             )}
           </span>

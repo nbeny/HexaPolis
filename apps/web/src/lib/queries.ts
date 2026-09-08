@@ -114,18 +114,21 @@ export const DEPUTY_QUERY = /* GraphQL */ `
 `
 
 export const DEPUTIES_QUERY = /* GraphQL */ `
-  query Deputies($legislature: Int, $groupId: ID, $departmentCode: String, $first: Int, $after: String) {
+  query Deputies($legislature: Int, $groupId: ID, $departmentCode: String, $first: Int, $after: String, $before: String) {
     deputies(
       legislature: $legislature
       groupId: $groupId
       departmentCode: $departmentCode
       first: $first
       after: $after
+      before: $before
     ) {
       totalCount
       pageInfo {
-        hasNextPage
+        startCursor
         endCursor
+        hasNextPage
+        hasPreviousPage
       }
       edges {
         cursor

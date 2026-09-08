@@ -109,6 +109,7 @@ export type Deputy = {
 
 export type DeputyBallotPositionsArgs = {
   after: InputMaybe<Scalars['String']['input']>;
+  before: InputMaybe<Scalars['String']['input']>;
   first: InputMaybe<Scalars['Int']['input']>;
   legislature: InputMaybe<Scalars['Int']['input']>;
 };
@@ -150,6 +151,8 @@ export type Mandate = {
 export type PageInfo = {
   endCursor: Maybe<Scalars['String']['output']>;
   hasNextPage: Scalars['Boolean']['output'];
+  hasPreviousPage: Scalars['Boolean']['output'];
+  startCursor: Maybe<Scalars['String']['output']>;
 };
 
 export type ProvenanceRecord = {
@@ -173,6 +176,7 @@ export type Query = {
 
 export type QueryDeputiesArgs = {
   after: InputMaybe<Scalars['String']['input']>;
+  before: InputMaybe<Scalars['String']['input']>;
   departmentCode: InputMaybe<Scalars['String']['input']>;
   first: InputMaybe<Scalars['Int']['input']>;
   groupId: InputMaybe<Scalars['ID']['input']>;
@@ -236,10 +240,11 @@ export type DeputiesQueryVariables = Exact<{
   departmentCode: InputMaybe<Scalars['String']['input']>;
   first: InputMaybe<Scalars['Int']['input']>;
   after: InputMaybe<Scalars['String']['input']>;
+  before: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type DeputiesQuery = { deputies: { totalCount: number, pageInfo: { hasNextPage: boolean, endCursor: string | null }, edges: Array<{ cursor: string, node: { id: string, slug: string, displayName: string, constituencyCode: string | null, constituencyLabel: string | null, departmentCode: string | null, currentGroupId: string | null, currentGroupShortLabel: string | null, currentGroupColor: string | null } }> } };
+export type DeputiesQuery = { deputies: { totalCount: number, pageInfo: { startCursor: string | null, endCursor: string | null, hasNextPage: boolean, hasPreviousPage: boolean }, edges: Array<{ cursor: string, node: { id: string, slug: string, displayName: string, constituencyCode: string | null, constituencyLabel: string | null, departmentCode: string | null, currentGroupId: string | null, currentGroupShortLabel: string | null, currentGroupColor: string | null } }> } };
 
 export type FilterOptionsQueryVariables = Exact<{
   first: InputMaybe<Scalars['Int']['input']>;

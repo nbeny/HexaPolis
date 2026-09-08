@@ -20,6 +20,7 @@ describe('readListParams', () => {
       groupId: 'grp-1',
       departmentCode: '75',
       after: 'b2Zmc2V0OjI1',
+      before: null,
     })
   })
 
@@ -29,6 +30,7 @@ describe('readListParams', () => {
       groupId: null,
       departmentCode: null,
       after: null,
+      before: null,
     })
   })
 
@@ -50,6 +52,7 @@ describe('buildListHref', () => {
     groupId: 'grp-1',
     departmentCode: '75',
     after: null,
+    before: null,
   }
 
   it('conserve les filtres actifs dans le lien « page suivante »', () => {
@@ -74,7 +77,13 @@ describe('buildListHref', () => {
 
   it('rend une URL nue quand aucun filtre n’est actif', () => {
     expect(
-      buildListHref({ legislature: null, groupId: null, departmentCode: null, after: null }),
+      buildListHref({
+        legislature: null,
+        groupId: null,
+        departmentCode: null,
+        after: null,
+        before: null,
+      }),
     ).toBe('/deputes')
   })
 
@@ -84,13 +93,20 @@ describe('buildListHref', () => {
       groupId: 'a&b=c',
       departmentCode: null,
       after: null,
+      before: null,
     })
     expect(href).toBe('/deputes?groupId=a%26b%3Dc')
   })
 })
 
 describe('isPastLastPage', () => {
-  const withCursor = { legislature: null, groupId: null, departmentCode: '33', after: 'b2Zmc2V0OjI1' }
+  const withCursor = {
+    legislature: null,
+    groupId: null,
+    departmentCode: '33',
+    after: 'b2Zmc2V0OjI1',
+    before: null,
+  }
 
   // Cas réel de l'écart 4 : `?departmentCode=33&after=b2Zmc2V0OjI1` sur 12
   // résultats — la page est vide, mais les filtres, eux, correspondent
@@ -112,6 +128,38 @@ describe('isPastLastPage', () => {
     // filtre, pas la pagination : le message « aucun résultat » reste vrai.
     expect(isPastLastPage(withCursor, 0, 0)).toBe(false)
   })
+
+  // Symétrique de l'écart 4, côté retour arrière : un `before` périmé ou
+  // bricolé peut tout aussi bien pointer hors d'une liste non vide.
+  it('vrai aussi quand un curseur `before` dépasse le début d’une liste non vide', () => {
+    expect(isPastLastPage({ ...withCursor, after: null, before: 'b2Zmc2V0OjA=' }, 0, 12)).toBe(
+      true,
+    )
+  })
+})
+
+describe('before', () => {
+  it('lit le curseur de retour dans la query string', () => {
+    expect(readListParams({ before: 'Y3Vyc2V1cg==' }).before).toBe('Y3Vyc2V1cg==')
+  })
+
+  it('rend null quand il est absent', () => {
+    expect(readListParams({}).before).toBeNull()
+  })
+
+  it('sérialise `before` dans le lien, en conservant les filtres actifs', () => {
+    const params = readListParams({ departmentCode: '33', after: 'QUZURVI=' })
+    expect(buildListHref(params, { after: null, before: 'QkVGT1JF' })).toBe(
+      '/deputes?departmentCode=33&before=QkVGT1JF',
+    )
+  })
+
+  it("n'émet jamais `after` et `before` ensemble : l'API les refuse", () => {
+    const params = readListParams({ after: 'QUZURVI=' })
+    const href = buildListHref(params, { before: 'QkVGT1JF' })
+    expect(href).not.toContain('after=')
+    expect(href).toContain('before=QkVGT1JF')
+  })
 })
 
 describe('hasActiveFilters', () => {
@@ -122,6 +170,7 @@ describe('hasActiveFilters', () => {
         groupId: null,
         departmentCode: null,
         after: 'b2Zmc2V0OjI1',
+        before: null,
       }),
     ).toBe(false)
     expect(
@@ -130,6 +179,7 @@ describe('hasActiveFilters', () => {
         groupId: null,
         departmentCode: '75',
         after: null,
+        before: null,
       }),
     ).toBe(true)
   })
