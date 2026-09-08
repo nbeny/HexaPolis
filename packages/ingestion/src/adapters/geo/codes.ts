@@ -12,6 +12,14 @@
  * Rend `null` quand la source ne cartographie pas le territoire — c'est un
  * fait à afficher, pas une erreur à masquer : voir la liste des 18 députés
  * concernés dans la spec §4.3.
+ *
+ * Cette fonction est dupliquée dans `apps/web/src/lib/circonscription-codes.ts`,
+ * délibérément : `apps/web` ne dépend pas de `@poligraph/ingestion`, et créer
+ * cette dépendance ferait entrer Prisma et le pipeline d'import dans le
+ * périmètre du front pour quinze lignes. La table de correspondance est de la
+ * donnée de conception, pas de la logique métier partagée. Les deux copies ont
+ * chacune leur suite de tests, sur les mêmes cas : toute divergence doit s'y
+ * voir.
  */
 const OUTRE_MER: Record<string, string> = {
   '971': 'ZA', // Guadeloupe

@@ -13,6 +13,15 @@ export const metadata: Metadata = {
     "Où siège chaque député, sur les contours des circonscriptions législatives publiés par data.gouv.fr.",
 }
 
+/**
+ * Rendu dynamique explicite. Sans cela, Next prérend cette page au build et
+ * tente d'interroger l'API, qui ne tourne ni en local à ce moment-là ni en
+ * CI : `next build` échoue en ECONNREFUSED. Les trois autres pages y
+ * échappent par effet de bord, parce qu'elles lisent `searchParams` ou
+ * `params` ; celle-ci n'a aucun paramètre, il faut donc le dire.
+ */
+export const dynamic = 'force-dynamic'
+
 /** Même valeur que `loadFilterOptions` (`lib/filter-options.ts`) : 577 députés, 3 pages de 200. */
 const SCAN_PAGE_SIZE = 200
 
