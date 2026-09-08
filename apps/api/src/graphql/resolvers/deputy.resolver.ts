@@ -98,7 +98,7 @@ export class DeputyResolver {
       limit,
       offset,
     )
-    return buildConnection(rows, offset, totalCount, cardToDeputy)
+    return buildConnection({ rows, offset, totalCount, toNode: cardToDeputy })
   }
 
   @Query(() => [SearchHit])
@@ -167,7 +167,7 @@ export class DeputyResolver {
       limit,
       offset,
     )
-    return buildConnection(rows, offset, totalCount, voteToBallotPosition)
+    return buildConnection({ rows, offset, totalCount, toNode: voteToBallotPosition })
   }
 
   /**

@@ -4,7 +4,16 @@ import { encodeCursor } from './cursor.js'
 
 @ObjectType()
 export class PageInfo {
-  /** Position AVANT le premier élément de la page. Symétrique de `endCursor`. */
+  /**
+   * Position AVANT le premier élément de la page — toujours présent, même
+   * sur une page vide, car il désigne une position et non un élément. C'est
+   * ce qui permet à un client de revenir en arrière depuis un curseur `after`
+   * périmé qui ne renvoie plus aucune ligne. `hasPreviousPage`/`hasNextPage`
+   * restent la seule source de vérité pour décider d'afficher une navigation.
+   *
+   * Écart assumé à la spec Relay, où `startCursor` est nul sur une connexion
+   * vide.
+   */
   @Field({ nullable: true })
   startCursor?: string
 
@@ -29,6 +38,13 @@ export interface Connection<T> {
   totalCount: number
 }
 
+export interface BuildConnectionArgs<TRow, TNode> {
+  rows: readonly TRow[]
+  offset: number
+  totalCount: number
+  toNode: (row: TRow) => TNode
+}
+
 /**
  * Fabrique la connexion Relay d'une page déjà lue.
  *
@@ -43,12 +59,12 @@ export interface Connection<T> {
  * position avant le premier, et l'égalité `startCursor(page n+1) ===
  * endCursor(page n)`.
  */
-export function buildConnection<TRow, TNode>(
-  rows: readonly TRow[],
-  offset: number,
-  totalCount: number,
-  toNode: (row: TRow) => TNode,
-): Connection<TNode> {
+export function buildConnection<TRow, TNode>({
+  rows,
+  offset,
+  totalCount,
+  toNode,
+}: BuildConnectionArgs<TRow, TNode>): Connection<TNode> {
   const edges = rows.map((row, index) => ({
     cursor: encodeCursor(offset + index + 1),
     node: toNode(row),

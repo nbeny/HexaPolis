@@ -23,12 +23,22 @@ afterAll(async () => {
 describe('Query.deputies', () => {
   it('liste les députés en exercice, paginés', async () => {
     const { body } = await testApp.graphql(`
-      { deputies(first: 1) { totalCount pageInfo { hasNextPage } edges { node { displayName } } } }
+      {
+        deputies(first: 1) {
+          totalCount
+          pageInfo { startCursor hasNextPage hasPreviousPage }
+          edges { node { displayName } }
+        }
+      }
     `)
     const connection = (body.data as any).deputies
     expect(connection.totalCount).toBe(2) // Alice et Bob.
     expect(connection.edges).toHaveLength(1)
     expect(connection.pageInfo.hasNextPage).toBe(true)
+    // Première page : pas de précédente, mais un startCursor tout de même
+    // (voir apps/api/src/graphql/common/connection.ts).
+    expect(connection.pageInfo.hasPreviousPage).toBe(false)
+    expect(connection.pageInfo.startCursor).toBeTruthy()
   })
 
   it('filtre par groupe', async () => {

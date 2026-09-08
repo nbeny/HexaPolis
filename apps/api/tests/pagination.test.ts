@@ -181,14 +181,24 @@ describe('PageInfo — les bornes des deux côtés', () => {
   })
 
   it('annonce une page précédente ET une suivante au milieu', async () => {
-    const page2 = await pageOf((await pageOf()).pageInfo.endCursor)
+    const page1 = await pageOf()
+    const page2 = await pageOf(page1.pageInfo.endCursor)
     expect(page2.pageInfo.hasPreviousPage).toBe(true)
     expect(page2.pageInfo.hasNextPage).toBe(true)
   })
 
+  // Alice a 4 positions et `first: 1` : exactement 3 avancées après la
+  // première page. La boucle est bornée par ce compte attendu plutôt que par
+  // `hasNextPage` seul, pour qu'une régression qui laisserait `hasNextPage`
+  // toujours vrai fasse échouer le test au lieu de tourner jusqu'au timeout.
   it("annonce une page précédente mais aucune suivante sur la dernière page", async () => {
     let page = await pageOf()
-    while (page.pageInfo.hasNextPage) page = await pageOf(page.pageInfo.endCursor)
+    let advances = 0
+    while (page.pageInfo.hasNextPage && advances < 10) {
+      page = await pageOf(page.pageInfo.endCursor)
+      advances++
+    }
+    expect(advances).toBe(3)
     expect(page.pageInfo.hasPreviousPage).toBe(true)
     expect(page.pageInfo.hasNextPage).toBe(false)
   })
