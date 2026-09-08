@@ -87,17 +87,25 @@ export const DEPUTY_QUERY = /* GraphQL */ `
         label
         importedAt
       }
-      ballotPositions(first: 25) {
+    }
+  }
+`
+
+/**
+ * Historique de vote complet, requêté depuis le navigateur (voir
+ * `vote-history.tsx`) : c'est le premier point de la fiche que
+ * `DEPUTY_QUERY` ne couvre plus, précisément parce qu'il ne tient pas dans
+ * les 25 premières positions.
+ */
+export const VOTES_QUERY = /* GraphQL */ `
+  query VoteHistory($slug: String!, $first: Int, $after: String, $before: String) {
+    deputy(slug: $slug) {
+      ballotPositions(first: $first, after: $after, before: $before) {
         totalCount
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
+        pageInfo { startCursor endCursor hasNextPage hasPreviousPage }
         edges {
-          cursor
           node {
             id
-            ballotId
             ballotDate
             ballotTitle
             ballotNumber
