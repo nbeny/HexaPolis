@@ -31,3 +31,30 @@ export function decodeCursor(cursor: string): number {
   }
   return offset
 }
+
+/**
+ * Traduit une demande de page en offset de départ.
+ *
+ * Il n'y a délibérément pas d'argument `last` en pendant de `first` : sur des
+ * curseurs-offsets, reculer d'une page se calcule à partir de la taille de
+ * page déjà demandée. Ajouter `last` doublerait les chemins à tester sans
+ * rien exprimer de plus.
+ *
+ * `before` est borné à zéro. Un curseur forgé pointant avant le début ne rend
+ * donc jamais de page vide : il rend la première page, ce qui est la réponse
+ * honnête à « la page qui précède le début ».
+ */
+export function resolveOffset(
+  after: string | null | undefined,
+  before: string | null | undefined,
+  pageSize: number,
+): number {
+  if (after != null && before != null) {
+    throw new Error(
+      'Les curseurs `after` et `before` ne peuvent pas être fournis ensemble : la page demandée serait ambiguë.',
+    )
+  }
+  if (after != null) return decodeCursor(after)
+  if (before != null) return Math.max(0, decodeCursor(before) - pageSize)
+  return 0
+}

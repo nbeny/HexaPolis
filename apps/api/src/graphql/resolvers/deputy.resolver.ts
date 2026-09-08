@@ -1,6 +1,6 @@
 import { Args, ID, Int, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql'
 import { anIdFromSlug, buildDeputySlug } from '../common/slug.js'
-import { decodeCursor } from '../common/cursor.js'
+import { resolveOffset } from '../common/cursor.js'
 import { buildConnection } from '../common/connection.js'
 import { optionalArg } from '../common/optional-arg.js'
 import { clampPageSize, clampSearchLimit } from '../common/pagination.js'
@@ -85,10 +85,10 @@ export class DeputyResolver {
     departmentCode: string | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
+    @Args('before', { type: () => String, nullable: true }) before: string | null | undefined,
   ): Promise<InstanceType<typeof DeputyConnection>> {
-    const afterValue = optionalArg(after)
     const limit = clampPageSize(optionalArg(first))
-    const offset = afterValue ? decodeCursor(afterValue) : 0
+    const offset = resolveOffset(optionalArg(after), optionalArg(before), limit)
     const { rows, totalCount } = await this.goldRepository.listCards(
       {
         legislature: optionalArg(legislature),
@@ -157,10 +157,10 @@ export class DeputyResolver {
     @Args('legislature', { type: () => Int, nullable: true }) legislature: number | null | undefined,
     @Args('first', { type: () => Int, nullable: true }) first: number | null | undefined,
     @Args('after', { type: () => String, nullable: true }) after: string | null | undefined,
+    @Args('before', { type: () => String, nullable: true }) before: string | null | undefined,
   ): Promise<InstanceType<typeof BallotPositionConnection>> {
-    const afterValue = optionalArg(after)
     const limit = clampPageSize(optionalArg(first))
-    const offset = afterValue ? decodeCursor(afterValue) : 0
+    const offset = resolveOffset(optionalArg(after), optionalArg(before), limit)
     const { rows, totalCount } = await this.goldRepository.listVotes(
       deputy.id,
       optionalArg(legislature),

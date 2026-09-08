@@ -209,3 +209,45 @@ describe('PageInfo — les bornes des deux côtés', () => {
     expect(page2.pageInfo.startCursor).toBe(page1.pageInfo.endCursor)
   })
 })
+
+const QUERY_BEFORE = `
+  query($slug: String!, $first: Int, $after: String, $before: String) {
+    deputy(slug: $slug) {
+      ballotPositions(first: $first, after: $after, before: $before) {
+        pageInfo { startCursor endCursor hasPreviousPage }
+        edges { cursor node { ballotTitle } }
+      }
+    }
+  }
+`
+
+describe('Deputy.ballotPositions — retour arrière', () => {
+  it('« Précédent » depuis la page 2 rend exactement la page 1', async () => {
+    const page1 = await pageOf()
+    const page2 = await pageOf(page1.pageInfo.endCursor)
+
+    const { body } = await testApp.graphql(QUERY_BEFORE, {
+      slug: fixture.alice.slug,
+      first: 1,
+      before: page2.pageInfo.startCursor,
+    })
+    expect(body.errors).toBeUndefined()
+    const back = (body.data as any).deputy.ballotPositions
+
+    expect(back.edges.map((e: any) => e.cursor)).toEqual(
+      page1.edges.map((e: any) => e.cursor),
+    )
+    expect(back.pageInfo.hasPreviousPage).toBe(false)
+  })
+
+  it('rejette `after` et `before` fournis ensemble', async () => {
+    const page1 = await pageOf()
+    const { body } = await testApp.graphql(QUERY_BEFORE, {
+      slug: fixture.alice.slug,
+      first: 1,
+      after: page1.pageInfo.endCursor,
+      before: page1.pageInfo.endCursor,
+    })
+    expect(body.errors?.[0]?.message).toMatch(/ensemble/)
+  })
+})

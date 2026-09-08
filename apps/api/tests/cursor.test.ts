@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeCursor, encodeCursor } from '../src/graphql/common/cursor.js'
+import { decodeCursor, encodeCursor, resolveOffset } from '../src/graphql/common/cursor.js'
 
 describe('encodeCursor / decodeCursor', () => {
   it('fait l’aller-retour', () => {
@@ -13,5 +13,29 @@ describe('encodeCursor / decodeCursor', () => {
 
   it('rejette un curseur négatif', () => {
     expect(() => decodeCursor(encodeCursor(-1))).toThrow()
+  })
+})
+
+describe('resolveOffset', () => {
+  it('part de zéro quand aucun curseur n’est fourni', () => {
+    expect(resolveOffset(undefined, undefined, 25)).toBe(0)
+  })
+
+  it('avance à la position du curseur `after`', () => {
+    expect(resolveOffset(encodeCursor(50), undefined, 25)).toBe(50)
+  })
+
+  it('recule d’une page complète depuis `before`', () => {
+    expect(resolveOffset(undefined, encodeCursor(50), 25)).toBe(25)
+  })
+
+  it('borne le recul à zéro plutôt que de produire un offset négatif', () => {
+    expect(resolveOffset(undefined, encodeCursor(10), 25)).toBe(0)
+  })
+
+  it('refuse `after` et `before` ensemble : la page demandée serait ambiguë', () => {
+    expect(() => resolveOffset(encodeCursor(10), encodeCursor(50), 25)).toThrow(
+      /ensemble/,
+    )
   })
 })
