@@ -15,7 +15,12 @@ export async function startServer(
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const app = await NestFactory.create(ServerModule.forRoot(options), { logger: ['warn', 'error'] })
   const origins = corsOrigins(process.env)
-  if (origins.length > 0) app.enableCors({ origin: origins })
+  if (origins.length > 0) {
+    app.enableCors({ origin: origins })
+    console.warn(`CORS_ALLOWED_ORIGINS : ${origins.join(', ')}`)
+  } else {
+    console.warn('CORS_ALLOWED_ORIGINS absente ou vide : aucune origine navigateur autorisée.')
+  }
   await app.listen(port)
   const url = (await app.getUrl()).replace('[::1]', 'localhost')
   return { url, close: () => app.close() }
