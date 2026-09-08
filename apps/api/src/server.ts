@@ -17,7 +17,10 @@ export async function startServer(
   const origins = corsOrigins(process.env)
   if (origins.length > 0) {
     app.enableCors({ origin: origins })
-    console.warn(`CORS_ALLOWED_ORIGINS : ${origins.join(', ')}`)
+    // `log` et non `warn` : une liste d'origines configurée est l'état
+    // nominal. Avertir dessus banaliserait l'avertissement du cas vide,
+    // qui est le seul des deux à signaler une panne.
+    console.log(`CORS_ALLOWED_ORIGINS : ${origins.join(', ')}`)
   } else {
     console.warn('CORS_ALLOWED_ORIGINS absente ou vide : aucune origine navigateur autorisée.')
   }
