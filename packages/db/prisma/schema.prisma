@@ -446,6 +446,24 @@ model RneEluRaw {
   @@schema("bronze")
 }
 
+model GeoCirconscriptionRaw {
+  id                  BigInt  @id @default(autoincrement())
+  importRunId         String  @map("import_run_id")
+  ligne               Int
+  codeCirconscription String? @map("code_circonscription")
+  codeDepartement     String? @map("code_departement")
+  nomCirconscription  String? @map("nom_circonscription")
+  nomDepartement      String? @map("nom_departement")
+  /// Géométrie GeoJSON telle que publiée, sans simplification ni reprojection.
+  geometry            Json
+  payload             Json
+
+  @@unique([importRunId, ligne])
+  @@index([codeCirconscription])
+  @@map("geo_circonscription_raw")
+  @@schema("bronze")
+}
+
 model CnccfpCompteRaw {
   id                BigInt  @id @default(autoincrement())
   importRunId       String  @map("import_run_id")

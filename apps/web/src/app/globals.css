@@ -1,1 +1,4 @@
 @import 'tailwindcss';
+/* Feuille de style de Leaflet (composant `carte.tsx`) : le paquet npm
+   l'embarque, ce qui évite une requête vers un CDN tiers pour l'afficher. */
+@import 'leaflet/dist/leaflet.css';

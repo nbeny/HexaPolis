@@ -16,7 +16,8 @@
     "stack:logs": "docker compose logs -f",
     "db:up": "docker compose up -d postgres",
     "db:migrate": "node scripts/with-env.mjs pnpm --filter @poligraph/db exec prisma migrate dev",
-    "db:status": "node scripts/with-env.mjs pnpm --filter @poligraph/db exec prisma migrate status"
+    "db:status": "node scripts/with-env.mjs pnpm --filter @poligraph/db exec prisma migrate status",
+    "geo:emit": "node scripts/with-env.mjs pnpm --filter @poligraph/ingestion exec tsx scripts/emit-geo.ts"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

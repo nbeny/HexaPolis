@@ -194,6 +194,40 @@ export const FILTER_OPTIONS_QUERY = /* GraphQL */ `
   }
 `
 
+/**
+ * Alimente `/carte`. Champs minimaux pour relier chaque circonscription du
+ * GeoJSON (`apps/web/public/geo/circonscriptions.json`) à son député :
+ * `constituencyCode` (traduit par `codeGeoDepuisCirconscription`, voir
+ * `apps/web/src/lib/circonscription-codes.ts`) sert de clé de jointure, le
+ * reste alimente l'infobulle et la coloration par groupe.
+ *
+ * Même balayage que `FILTER_OPTIONS_QUERY` : 577 députés, au plus 3 pages de
+ * 200 (`MAX_PAGE_SIZE` côté API).
+ */
+export const MAP_DEPUTIES_QUERY = /* GraphQL */ `
+  query MapDeputies($first: Int, $after: String) {
+    deputies(first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          id
+          slug
+          displayName
+          constituencyCode
+          constituencyLabel
+          departmentCode
+          currentGroupId
+          currentGroupShortLabel
+          currentGroupColor
+        }
+      }
+    }
+  }
+`
+
 export const SEARCH_QUERY = /* GraphQL */ `
   query Search($query: String!, $first: Int) {
     search(query: $query, first: $first) {
