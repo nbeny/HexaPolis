@@ -92,9 +92,11 @@ function summaryFacts(summary: VotingSummary, takingOfficeDate: string | null): 
 
   return [
     // Le total de tête porte sur la seule 17e législature — c'est le périmètre
-    // de `gold.deputy_card`. La liste des derniers scrutins, elle, ne filtre
-    // pas : les libellés le disent des deux côtés, faute de quoi deux totaux
-    // différents se liraient comme une contradiction.
+    // de `gold.deputy_card`. `VoteHistory`, plus bas, ne filtre pas : son
+    // titre porte son propre qualificatif (« toutes législatures confondues »)
+    // juste au-dessus des chiffres qu'il introduit, faute de quoi ce total-ci
+    // et le sien se liraient comme deux mesures contradictoires de la même
+    // chose alors qu'ils ne portent pas sur le même périmètre.
     {
       label: 'Positions enregistrées (17e législature)',
       value: formatInteger(summary.voteCount),
@@ -238,7 +240,17 @@ export function VotingSection({
         côté de lui et jamais séparé.
       </p>
 
-      <h3 className="mt-5 text-sm font-medium text-stone-900">Scrutins</h3>
+      {/*
+        Qualificatif obligatoire : « Positions enregistrées » ci-dessus ne
+        porte que sur la 17e législature (périmètre de `gold.deputy_card`),
+        tandis que `VoteHistory` liste l'historique complet. Sans lui, les
+        deux chiffres — par ex. 1 212 contre 2 518 pour un même député — se
+        liraient comme une contradiction plutôt que comme deux périmètres
+        différents.
+      */}
+      <h3 className="mt-5 text-sm font-medium text-stone-900">
+        Scrutins <span className="font-normal text-stone-500">(toutes législatures confondues)</span>
+      </h3>
       <VoteHistory slug={slug} />
     </SectionCard>
   )

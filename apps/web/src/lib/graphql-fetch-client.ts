@@ -17,7 +17,8 @@ interface GraphQLResponse<T> {
   errors?: { message: string; path?: (string | number)[] }[]
 }
 
-export class GraphqlError extends Error {}
+import { GraphqlError } from './graphql-error'
+export { GraphqlError }
 
 export async function graphqlFetchClient<T>(
   query: string,

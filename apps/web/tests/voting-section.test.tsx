@@ -8,14 +8,22 @@ import { VotingSection } from '@/components/sections/voting-section'
  * requête l'API depuis le navigateur (tâche 5). Ces tests portent sur la
  * synthèse de participation, restée côté serveur : ils ne vérifient rien de
  * l'historique de vote, mais le montage de `VoteHistory` appellerait `fetch`
- * pour de vrai sans ce bouchon. On le neutralise avec une réponse `deputy:
- * null` : `VoteHistory` reste alors en chargement, ce qu'aucun test ici
- * n'observe.
+ * pour de vrai sans ce bouchon.
+ *
+ * Le bouchon ne résout jamais : ces tests ne rendent d'assertion sur aucun
+ * état de `VoteHistory` (ni chargement, ni prêt, ni erreur, ni introuvable —
+ * ces états sont couverts par `vote-history.test.tsx`), donc rien ne doit
+ * s'y résoudre. Un bouchon qui *répondrait* forcerait une transition d'état
+ * hors du rendu initial, sans qu'aucun test ici ne l'attende — exactement le
+ * genre de mise à jour que React signale comme non enveloppée dans `act()`.
+ * `{ deputy: null }` a été écarté pour la même raison dans l'autre sens :
+ * c'est un mode de panne réel de l'API (voir `vote-history.test.tsx`, état
+ * « introuvable »), pas une donnée de confort à normaliser ici.
  */
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(JSON.stringify({ data: { deputy: null } }), { status: 200 })),
+    vi.fn(() => new Promise<Response>(() => {})),
   )
 })
 afterEach(() => vi.unstubAllGlobals())
