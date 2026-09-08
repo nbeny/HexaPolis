@@ -74,6 +74,7 @@ services:
       DATABASE_URL_TEST: postgresql://poligraph:poligraph@postgres:5432/poligraph_test?schema=public
       PORT: '4000'
       BUILD_WORKSPACE_LIBS: '1'
+      CORS_ALLOWED_ORIGINS: http://localhost:30000
     ports:
       - '30001:4000'
     volumes: *dev-volumes
@@ -112,6 +113,7 @@ services:
       # serveur et ne re-requêtent jamais depuis le navigateur : l'URL est
       # résolue dans le réseau compose, le nom de service suffit donc.
       POLIGRAPH_API_URL: http://api:4000/graphql
+      NEXT_PUBLIC_POLIGRAPH_API_URL: http://localhost:30001/graphql
     ports:
       - '30000:3100'
     volumes: *dev-volumes

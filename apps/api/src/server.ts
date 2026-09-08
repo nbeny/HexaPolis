@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core'
+import { corsOrigins } from './graphql/cors.js'
 import { ServerModule, type ServerModuleOptions } from './server.module.js'
 
 /**
@@ -13,6 +14,8 @@ export async function startServer(
   options: ServerModuleOptions = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const app = await NestFactory.create(ServerModule.forRoot(options), { logger: ['warn', 'error'] })
+  const origins = corsOrigins(process.env)
+  if (origins.length > 0) app.enableCors({ origin: origins })
   await app.listen(port)
   const url = (await app.getUrl()).replace('[::1]', 'localhost')
   return { url, close: () => app.close() }
